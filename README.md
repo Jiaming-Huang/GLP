@@ -1,12 +1,12 @@
 # GLP
 
-This repository contains the code and data for “Group Local Projection”. Feel free to contact me ([jiaming.huang@barcelonagse.eu](jiaming.huang@barcelonagse.eu) if you have any doubts on the codes.
+This repository contains the code and data for “Group Local Projection”. Feel free to contact me ([jiaming.huang@barcelonagse.eu](jiaming.huang@barcelonagse.eu)) if you have any doubts on implementing the codes.
 
 ## Replication
 
 For the simulation study, the results can be replicated using `SIM_KnownGroupNum.m` (Section 6.2), `SIM_UnknownGroupNum.m` (Section 6.3) and `SIM_NoTrueGroup.m` (Section 6.4).
 
-For the empirical application, `EMP_Main.m` gives the baseline results (individual LP-IV, panel LP-IV and the GLP). `EMP_FAVAR.m` shows the FAVAR results. 
+For the empirical application, `EMP_Main.m` gives the baseline results (individual LP-IV, panel LP-IV and the GLP). `EMP_FAVAR.m` shows the FAVAR results. They all take `EMP_data.mat` as input.
 
 The FAVAR application involves two additional folders: 
 
