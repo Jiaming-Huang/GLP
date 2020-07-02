@@ -1,6 +1,8 @@
 # GLP
 
-This repository contains the code and data for “Group Local Projection”. Feel free to contact me ([jiaming.huang@barcelonagse.eu](jiaming.huang@barcelonagse.eu)) if you have any doubts on implementing the codes.
+This repository contains the code and data for “Group Local Projection”. You can find the latest draft and supplemental materials on my [webpage](https://sites.google.com/view/jiaminghuang/research).
+
+Feel free to contact me ([jiaming.huang@barcelonagse.eu](jiaming.huang@barcelonagse.eu)) if you have any doubts on implementing the codes.
 
 ## Replication
 
