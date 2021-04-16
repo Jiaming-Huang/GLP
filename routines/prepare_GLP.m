@@ -127,5 +127,6 @@ end
 param.T = sum(keep)/par.N;
 param.N = par.N;
 param.date = date(keep(1:T,1),1);
+param.nwtrunc = par.nwtrunc;
 reg.param = param;
 end

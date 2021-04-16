@@ -1,6 +1,12 @@
 % Group Local Projection
-% Version: 2020/07/01
+% Version: 2021/03/08
 % Author: Jiaming Huang
+% There are four possibilities (change line 33 and 38)
+%       - FE: lagged y - potential dynamic panel bias (but T is relatively large)
+%       - FE: no lagged y - then why do FE? all rhs variables are aggregates
+%       - RE: no lagged y - least efficient specification
+%       - RE: lagged y - potential violation of RE assumption
+
 
 close all; clear all; clc;
 addpath('./routines');
@@ -17,22 +23,24 @@ addpath('./routines');
 % par.date    = date(1:par.Tfull,1);
 % MSA         = reshape(MSA,par.Tfull,par.N);
 % clear dum
-% save EMP_data.mat
+% save('./output/EMP_data.mat');
 
-load EMP_data.mat
+load('./output/EMP_data.mat');
+
 %% Model Specification
 % 1. feed the index of your x, y and z
 % 2. specify the number of lags
-
-par.y_idx = 17;         % housing inflation, log difference *100
+FE = 1;
+par.y_idx = 18;         % housing inflation, log difference *100
 par.x_idx = 8;          % FFR - 8; GS1 - 9
-par.w_idx = [16 19 22 24];    %  FRM30, GIP, INFL_PCE, reloan
+par.w_idx = [16 20 23 25];    %  FRM30, GIP, INFL_PCE, reloan
 par.z_idx = [13];       % FF4 - 12; info robust IV1 - 13; MPSign - 14; RR - 15; 
 par.nylag = 4;
 par.nxlag = 4;
 par.nwlag = 4;
-par.nzlag = 4;
+par.nzlag = 0;
 par.horizon = 24;       % horizons
+par.nwtrunc = 25;
 par.start = '1975-01-01';
 par.end   = '2007-12-01';
 reg = prepare_GLP(data, par);
@@ -41,97 +49,98 @@ tmp = reg;
 tmp.LHS = cumsum(tmp.LHS,2);  % recover level
 
 %% Now you have three options: individual LP, panel LP or GLP
+H          = par.horizon;
+LineColors = [.0  .2  .4];          
+BandColors = [.7  .7  .7];
 
-%% 1) Individual LP-IV
-[b_id, se_id, F_id] = ind_LP(tmp);
-plot(F_id);mean(F_id)
-figure(1)
-plot(b_id','k-','LineWidth',1)
+%% 1) panel LP-IV
+[b, se] = panel_LP(tmp, FE);
 
-
-figure;
-id =211; % Los Angeles
-plot(b_id(id,:),'k-','LineWidth',2)
-hold on
-plot( (b_id(id,:)+1.96*se_id(id,:))','r--','LineWidth',2)
-plot( (b_id(id,:)-1.96*se_id(id,:))','r--','LineWidth',2)
-yline(0,'k--');
-hold off
-
-figure;
-id =357; % Victoria
-plot(b_id(id,:),'k-','LineWidth',2)
-hold on
-plot( (b_id(id,:)+1.96*se_id(id,:))','r--','LineWidth',2)
-plot( (b_id(id,:)-1.96*se_id(id,:))','r--','LineWidth',2)
-yline(0,'k--');
-hold off
-
-%% 2) panel LP-IV
-[b, e, se] = panel_LP(tmp, 0);
-figure(3)
-plot(b','k-','LineWidth',2);
+% plotting
+figure; 
 hold on;
-plot(b+1.96*se,'r--','LineWidth',2);
-plot(b-1.96*se,'r--','LineWidth',2);
-yline(0,'k--');
+ub = b+1.96*se;
+lb = b-1.96*se;
+fill([1:H, fliplr(1:H)],...
+    [ub fliplr(lb)],...
+    BandColors,'EdgeColor','none');
+plot(1:H, b,'LineWidth',1.2,'color',LineColors);            
+yline(0,'k','LineWidth',.7);  
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+hold off;
+
+
+
+%% 2) Individual LP-IV
+[b_id, se_id, F_id] = ind_LP(tmp);
+mean(F_id)
+
+figure;
+hold on;
+plot(1:H, b_id','LineWidth',1.2,'color',LineColors); 
+yline(0,'k','LineWidth',.7);  
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+hold off;
+
+
+
+figure; 
+hold on;
+id =211; % Los Angeles
+ub = b_id(id,:)+1.96*se_id(id,:);
+lb = b_id(id,:)-1.96*se_id(id,:);
+fill([1:H, fliplr(1:H)],...
+    [ub fliplr(lb)],...
+    BandColors,'EdgeColor','none');
+plot(1:H, b_id(id,:),'LineWidth',1.2,'color',LineColors);            
+yline(0,'k','LineWidth',.7);  
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+hold off;
+
+
+figure; 
+hold on;
+id =357; % Los Angeles
+ub = b_id(id,:)+1.96*se_id(id,:);
+lb = b_id(id,:)-1.96*se_id(id,:);
+fill([1:H, fliplr(1:H)],...
+    [ub fliplr(lb)],...
+    BandColors,'EdgeColor','none');
+plot(1:H, b_id(id,:),'LineWidth',1.2,'color',LineColors);            
+yline(0,'k','LineWidth',.7);  
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
 hold off;
 
 %% 3) Group LP
-Kmax   = 10;
-ninit  = 500;
-tsls   = 1;
-FE     = 0;   % 1 if include fixed effects, robust 
-Group  = zeros(par.N,Kmax);
-GIRF = cell(Kmax,1);
-GSE  = cell(Kmax,1);
-Qpath  = cell(Kmax,1);
-OBJ    = nan(Kmax,1);
-for Kguess = 1:Kmax
-    % estimate with cumulative ones, robust to housing inflation
-    [g, girf, gse, q, ~, ~] = GroupLPIV(tmp, Kguess, ninit, tsls, FE, b_id); 
-    Group(:,Kguess)= g;
-    GIRF{Kguess,1} = girf;
-    GSE{Kguess,1}  = gse;
-    Qpath{Kguess,1}= q; OBJ(Kguess,1)=min(q);
-end
+Gmax   = 10;
+nInit  = 100;
+bInit  = b_id;
+weight = se_id;
+inference = 3;
+[Gr_EST, GIRF, GSE, IC] = GroupLPIV(tmp, Gmax, nInit, bInit, weight, FE, inference);
 
-save Final_MSA_RobustIV.mat
+save('./output/EMP/EMP_FE_Y.mat');
 
-% plot it
-K0=3;   % you can make different plots by changing K0
-btmp = GIRF{K0,1};
-setmp = GSE{K0,1};
-% relabeling so that smaller group number is associated with more positive
-% IRs
-if K0 <=3
-    Kgrid = [1:K0];
-elseif K0 == 4  
-    Kgrid = [3 1 4 2];
-elseif K0 == 5
-    Kgrid = [5 1 2 4 3];
-end
+
+Group = emp_relabel_plot(FE, par, Gr_EST, GIRF, GSE);
+
+%% Plot IC
 figure;
-for i = 1:K0
-    subplot(ceil(K0/2),2,i);
-    k = Kgrid(i);
-    plot(btmp(k,:),'k-','LineWidth',2)
-    hold on
-    plot( (btmp(k,:)+1.96*setmp(k,:))','r--')
-    plot( (btmp(k,:)-1.96*setmp(k,:))','r--')
-    yline(0,'k--')
-    hold off
-    xlabel(strcat({'Group'},{' '},num2str(i)));
-end
-
-
-%% Information criteria - upper bound of Kguess
-t = reg.param.T;N=par.N;
-plot(OBJ + [1:Kmax]'*OBJ(Kmax)*log(N*t) *(N+t)/(N*t),'b-s','LineWidth',2,'MarkerSize',5,...
+plot(IC,'b-s','LineWidth',2,'MarkerSize',5,...
 'MarkerEdgeColor','blue',...
 'MarkerFaceColor','blue');xlabel('Number of Groups');
 
 %% Exisitng Criteria: Ad-hoc panel LP
+% get the rich and poor index from data/MSA_Feature.xlsx, there are four
+% sheets
 % rich MSAs
 idx = rich;
 idx = kron(idx,ones(reg.param.T,1));idx = logical(idx);
@@ -143,19 +152,25 @@ adhoc.control = reg.control(idx,:);
 adhoc.param.T = reg.param.T;
 adhoc.param.N = sum(rich==1);
 
-[b_ad, ~, se_ad] = panel_LP(adhoc,0);
+[b_ad, se_ad] = panel_LP(adhoc,0);
 
-figure(10)
-plot(b_ad,'k-','LineWidth',2)
-hold on
-plot( b_ad+1.96*se_ad,'r--','LineWidth',2)
-plot( b_ad-1.96*se_ad,'r--','LineWidth',2)
-hold off
-yline(0,'k--')
+figure;
+hold on;
+ub = b_ad+1.96*se_ad;
+lb = b_ad-1.96*se_ad;
+fill([1:H, fliplr(1:H)],...
+    [ub fliplr(lb)],...
+    BandColors,'EdgeColor','none');
+plot(1:H, b_ad,'LineWidth',1.2,'color',LineColors);            
+yline(0,'k','LineWidth',.7);  
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+hold off;
+
 
 % poor MSAs
-poor = [149, 106, 23, 225, 216, 291, 360, 128, 381, 234];
-idx = zeros(N,1); idx(poor',1)=1;
+idx = poorG3_1;
 idx = kron(idx,ones(reg.param.T,1));idx = logical(idx);
 adhoc.y = reg.y(idx,:);
 adhoc.x = reg.x(idx,:);
@@ -163,27 +178,21 @@ adhoc.z = reg.z(idx,:);
 adhoc.LHS = cumsum(reg.LHS(idx,:),2);
 adhoc.control = reg.control(idx,:);
 adhoc.param.T = reg.param.T;
-adhoc.param.N = length(poor);
+adhoc.param.N = sum(poorG3_1);
 
-[b_ad, ~, se_ad] = panel_LP(adhoc,0);
+[b_ad, se_ad] = panel_LP(adhoc,0);
 
 figure;
-plot(b_ad,'k-','LineWidth',2)
-hold on
-plot( b_ad+1.96*se_ad,'r--','LineWidth',2)
-plot( b_ad-1.96*se_ad,'r--','LineWidth',2)
-hold off
-yline(0,'k--')
-
-
-
-
-
-
-
-
-
-
-
-
+hold on;
+ub = b_ad+1.96*se_ad;
+lb = b_ad-1.96*se_ad;
+fill([1:H, fliplr(1:H)],...
+    [ub fliplr(lb)],...
+    BandColors,'EdgeColor','none');
+plot(1:H, b_ad,'LineWidth',1.2,'color',LineColors);            
+yline(0,'k','LineWidth',.7);  
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+hold off;
 

@@ -16,9 +16,12 @@ elseif K0 == 3
     if parchoice == 1
         bet        = [3 3 3];
         phi        = [0.2, 0.6, 0.9];        
-    else
+    elseif parchoice == 2
         bet        = [1 2 3];
         phi        = [0.5, 0.5, 0.5];
+    else
+        bet        = [0.4 0.6 0.8];
+        phi        = [0.4, 0.4, 0.4];
     end
 else
     if parchoice == 1

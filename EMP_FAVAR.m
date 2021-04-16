@@ -6,6 +6,7 @@
 close all; clear all; clc;
 addpath('./routines');
 addpath('./fred');
+addpath('./output');
 addpath('./svar');
 
 
@@ -13,17 +14,18 @@ addpath('./svar');
 load EMP_data.mat
 
 % get variables for VAR
-varid = [8 16 19 22 24]; 
+varid = [8 16 20 23 25]; 
 zid   = [13]; 
 vars  = data(1:par.Tfull,varid);
 proxy = data(1:par.Tfull,zid);
 
 % get all the information variables
-HPINFL = reshape(data(:,17),par.Tfull,par.N);
+HPINFL = reshape(data(:,18),par.Tfull,par.N);
 
 % merge two dataset
 dateshp  = datetime(unique(date));
 infoVars = HPINFL(2:end,:);
+%infoVars = HPINFL(181:396,:); % using only 90-07 to estimate factors
 infoNames= MSA(1,:);
 
 figure;plot(infoVars);
@@ -58,7 +60,7 @@ modelSpec.start_date        = ['1990-01-01'];
 modelSpec.end_date          = ['2007-12-01'];
 modelSpec.DET               = [1 0 0];      % contant/trend/quadratic trend
 modelSpec.p                 = 4;           % number of lags
-modelSpec.irhor             = 24;           % maximal horizons
+modelSpec.irhor             = 25;          % maximal horizons
 for i = 1:nfac
     facname(1,i) = {strcat('FAC',num2str(i))};
 end
@@ -71,7 +73,7 @@ modelSpec.NWlags            = 8;
 % inference
 modelSpec.cLevel            = 95;     % confidence interval level
 modelSpec.nBoot             = 1000;        % # of bootstrap
-modelSpec.bootMethod        = 2;           % 1 - wild bootstrap;
+modelSpec.bootMethod        = 1;           % 1 - wild bootstrap;
                                            % 2 - Delta Method
                                            % 3 - Jentsch Lunsford MBB
 
@@ -127,29 +129,6 @@ SVAR.Waldstat  = SVARIVci.Waldstat;
 
 
 
-%% PART III: Plotting
-irhor     = SVAR.irhor;
-n         = SVAR.n;
-SVAR.select_variables{1,3} = 'INDPRO';
-SVAR.select_variables{1,4} = 'REALLN';
-SVAR.select_variables{1,5} = 'INFL (PCE)';
-
-figure;
-for i = 1:n-nfac
-    subplot(2,3,i);
-    hold on;
-        
-    % zero line
-    plot(0:irhor-1,zeros(size(0:irhor-1)),'k')    
-
-    % irf
-    plot(0:irhor-1,SVAR.irs(:,i),'k-','LineWidth',2);
-    % cbands
-    plot(0:irhor-1,SVAR.irsH(:,i),'r--');
-    plot(0:irhor-1,SVAR.irsL(:,i),'r--');
-    
-    title(SVAR.select_variables(i));
-end
     
     
 %% Recover IRFs for information variables
@@ -162,24 +141,87 @@ irf_x = lamhat*irf_fac';
 irf_x_h = lamhat*irf_fac_h';
 irf_x_l = lamhat*irf_fac_l';
 
-% interested in HP Inflation
-figure;
-plot(irf_x(1:size(MSA,2),:)','k-')
+
+%% PART III: Plotting
+H         = SVAR.irhor-1;
+n         = SVAR.n;
+SVAR.select_variables{1,3} = 'INDPRO';
+SVAR.select_variables{1,4} = 'REALLN';
+SVAR.select_variables{1,5} = 'INFL (PCE)';
+LineColors = [.0  .2  .4];          
+BandColors = [.7  .7  .7];
+
 
 figure;
-plot(cumsum(irf_x(1:size(MSA,2),:),2)','k-')
+% macro var
+for i = 1:n-nfac
+    subplot(3,3,i);
+    hold on;
+    % bands
+    ub = SVAR.irsH(2:end,i)'; % drop h=0
+    lb = SVAR.irsL(2:end,i)';
+    fill([1:H, fliplr(1:H)],...
+        [ub fliplr(lb)],...
+        BandColors,'EdgeColor','none');
+    % ir
+    plot(1:H, SVAR.irs(2:end,i)','LineWidth',1.2,'color',LineColors);  
+    
+    % zero line
+    yline(0,'k','LineWidth',.7);   
+
+    xlim([1 H]); axis tight
+    set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+        'FontSize',8,'Layer','top')
+    
+    title(SVAR.select_variables(i));
+    hold off;
+end
 
 
-% Los Angeles
+% la % victoria
 id = 211;
-figure;plot(cumsum(irf_x(id,:)),'k-');
-hold on; plot(cumsum(irf_x_h(id,:)),'r--');
-plot(cumsum(irf_x_l(id,:)),'r--');
-yline(0,'k--');
+ir = cumsum(irf_x(id,2:end));
+ub = cumsum(irf_x_h(id,2:end));
+lb = cumsum(irf_x_l(id,2:end));
+subplot(3,3,6);
+hold on;
+fill([1:H, fliplr(1:H)],...
+        [ub fliplr(lb)],...
+        BandColors,'EdgeColor','none');
+plot(1:H,ir,'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);   
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+title('Los Angeles, CA');
+hold off;
 
-% Victoria
+
 id = 357;
-figure;plot(cumsum(irf_x(id,:)),'k-');
-hold on; plot(cumsum(irf_x_h(id,:)),'r--');
-plot(cumsum(irf_x_l(id,:)),'r--');
-yline(0,'k--');
+ir = cumsum(irf_x(id,2:end));
+ub = cumsum(irf_x_h(id,2:end));
+lb = cumsum(irf_x_l(id,2:end));
+subplot(3,3,7);
+hold on;
+fill([1:H, fliplr(1:H)],...
+        [ub fliplr(lb)],...
+        BandColors,'EdgeColor','none');
+plot(1:H,ir,'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);   
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+title('Victoria, TX');
+hold off;
+
+% hpi
+irs = cumsum(irf_x(1:size(MSA,2),:),2)';
+subplot(3,3,8);
+hold on;
+plot(1:H,irs(2:end,:),'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);   
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+title('HPI');
+hold off;

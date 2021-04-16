@@ -68,7 +68,8 @@ Sim.reg.LHS = [Sim.reg.y reshape(lag(Sim.Y,-H),N*T,H)]; % including h=0
 
 Sim.reg.x = reshape(Sim.X,N*T,1);
 Sim.reg.z = reshape(Sim.Z,N*T,1);
-Sim.reg.control = [reshape(lag(Sim.Y,1),N*T,1)];
+Sim.reg.control = [];
+%Sim.reg.control = [reshape(lag(Sim.Y,1),N*T,1)];
 
 
 
@@ -77,17 +78,9 @@ Sim.reg.LHS = Sim.reg.LHS(~idna,:);
 Sim.reg.x = Sim.reg.x(~idna,:);
 Sim.reg.y = Sim.reg.y(~idna,:);
 Sim.reg.z = Sim.reg.z(~idna,:);
-Sim.reg.control = Sim.reg.control(~idna,:);
+%Sim.reg.control = Sim.reg.control(~idna,:);
 
 Sim.reg.param.N = N;
 Sim.reg.param.T = size(Sim.reg.x,1)/N;
+Sim.reg.param.nwtrunc = H+1;
 end
-
-% % bias correction: not used because it causes problem in SE estimation
-%   (See more in Tuelings et al. JAE 2014)
-%     for i = 1:N
-%         Sim.X(:,i) = Sim.Z(:,i)*((Sim.Z(:,i)'*Sim.Z(:,i))\(Sim.Z(:,i)'*Sim.X(:,i)));
-%     end
-%     Sim.reg.x = reshape(Sim.X,N*T,1);
-%     Sim.reg.z = reshape(Sim.X,N*T,1);  % OLS
-%     Sim.reg.control = [reshape(lag(Sim.Y,1),N*T,1) reshape(lag(Sim.X,-H),N*T,H)];

@@ -22,10 +22,10 @@ dataholder = cell(3,5);
 %% Parameter Setting
 
 % EST
-TSLS       = 1; 
 FE         = 1;
 H          = 6;               % h=0 is added in data preparation by default
-ninit      = 100;
+nInit      = 100;
+Gmax       = 8;
 
 % SIM
 nRep       = 500;
@@ -38,120 +38,79 @@ DGPsetup.burn= burn;
 
 %% Simulation
 for jj = 1:size(Ngrid,2)
-        % initialization, creating temporary statistics holder
-        Sim_Group   = cell(nRep,size(Tgrid,2));
-        Sim_Qpath   = cell(nRep,size(Tgrid,2));
-        Sim_IRF     = cell(nRep,size(Tgrid,2));
-        Sim_GSE     = cell(nRep,size(Tgrid,2));
-        Sim_bias    = cell(nRep,size(Tgrid,2));
-        Sim_RMSE    = cell(nRep,size(Tgrid,2));
-        IND_rmse        = nan(nRep,size(Tgrid,2));
-        PAN_rmse        = nan(nRep,size(Tgrid,2));
-        IND_SE          = cell(nRep,size(Tgrid,2));
-        N   = Ngrid(jj);
-        
-        G   = [1:N]';
-        % simulation setup
-        phi = (0.9-0.1)*rand(1,N);
-        bet = (3-1)*rand(1,N);
-        DGPsetup.par = [phi ;bet];
-        % create IRF_TRUE for computing RMSE
-        IRF_TRUE = nan(N,H+1);
-        for i =1:N
-            IRF_TRUE(i,:) = bet(i)*(phi(i).^[0:H]);
-        end
+    % initialization, creating temporary statistics holder
+    Sim_IRTrue  = cell(nRep,size(Tgrid,2));
+    Sim_IRF     = cell(nRep,size(Tgrid,2));
+    Sim_RMSE    = cell(nRep,size(Tgrid,2));
+    Sim_OBJ     = cell(nRep,size(Tgrid,2));
+    Sim_GEst    = nan(nRep,size(Tgrid,2));
+    
+    N   = Ngrid(jj);
     for tt = 1:size(Tgrid,2)
         T   = Tgrid(tt);
         fprintf('Start working on grid [N=%d, T=%d] \n', N, T)
         %% Simulation starts here
         tic
         for iRep = 1:nRep
+            % simulation setup
+            phi = (0.9-0.1)*rand(1,N);
+            bet = (3-1)*rand(1,N);
+            DGPsetup.par = [phi ;bet];
+            % create IRF_TRUE for computing RMSE
+            IR_TRUE = nan(N,H+1);
+            for i =1:N
+                IR_TRUE(i,:) = bet(i)*(phi(i).^[0:H]);
+            end
+            Sim_IRTrue{iRep,tt} = IR_TRUE;
+            
             Sim = DGP_no_group(N,T,DGPsetup);
             
             %% G-LP Estimation
-            get initial guess
-            [b,se,~]=ind_LP(Sim.reg);
-            IND_rmse(iRep,tt) = sqrt(mean( mean( (b - IRF_TRUE).^2)));
-            IND_SE{iRep,tt} = mean(se);
-            binit = b;
+            % using st
+            [b,~]=panel_LP(Sim.reg, FE);
+            rmse0 = sqrt(mean( mean( (b - IR_TRUE).^2)));
             
-            [G1, GIRF1, GSE1, Qpath1, ~, ~]   = GroupLPIV(Sim.reg, 1, ninit, TSLS, FE,binit);
-            [G2, GIRF2, GSE2, Qpath2, ~, ~]   = GroupLPIV(Sim.reg, 2, ninit, TSLS, FE,binit);
-            [G3, GIRF3, GSE3, Qpath3, ~, ~]   = GroupLPIV(Sim.reg, 3, ninit, TSLS, FE,binit);
-            [G4, GIRF4, GSE4, Qpath4, ~, ~]   = GroupLPIV(Sim.reg, 4, ninit, TSLS, FE,binit);
-            [G5, GIRF5, GSE5, Qpath5, ~, ~]   = GroupLPIV(Sim.reg, 5, ninit, TSLS, FE,binit);
-            [G6, GIRF6, GSE6, Qpath6, ~, ~]   = GroupLPIV(Sim.reg, 6, ninit, TSLS, FE,binit);
-            [G7, GIRF7, GSE7, Qpath7, ~, ~]   = GroupLPIV(Sim.reg, 7, ninit, TSLS, FE,binit);
-            [G8, GIRF8, GSE8, Qpath8, ~, ~]   = GroupLPIV(Sim.reg, 8, ninit, TSLS, FE,binit);
+            % get initial guess
+            [bInit,weight,~] = ind_LP(Sim.reg);
+            rmse1 = sqrt(mean( mean( (bInit - IR_TRUE).^2)));
+            
+            % glp
+            [Gr_EST, GIRF, OBJ, IC] = GroupLPIV_Sim_Unknown_Group(Sim.reg, Gmax, nInit, bInit, weight, FE);
+            
+            rmse = nan(1,Gmax);
+            for gr = 1:Gmax
+                rmse(gr) = getRMSE(Gr_EST(:,gr), IR_TRUE, GIRF{1,gr});
+            end            
+            
+            
+            Sim_IRF{iRep, tt} = GIRF;
+            Sim_RMSE{iRep, tt} = [rmse0 rmse rmse1];
+            Sim_OBJ{iRep,tt} = OBJ;
+            [~,gEst] = min(IC);
+            Sim_GEst(iRep, tt) = gEst;
 
-            [~, rmse1, ~, p1, ~]    = eval_GroupLPIV_noTrue([G G1], IRF_TRUE, GIRF1);
-            [~, rmse2, ~, p2, ~]    = eval_GroupLPIV_noTrue([G G2], IRF_TRUE, GIRF2);
-            [~, rmse3, ~, p3, ~]    = eval_GroupLPIV_noTrue([G G3], IRF_TRUE, GIRF3);
-            [~, rmse4, ~, p4, ~]    = eval_GroupLPIV_noTrue([G G4], IRF_TRUE, GIRF4);
-            [~, rmse5, ~, p5, ~]    = eval_GroupLPIV_noTrue([G G5], IRF_TRUE, GIRF5);
-            [~, rmse6, ~, p6, ~]    = eval_GroupLPIV_noTrue([G G6], IRF_TRUE, GIRF6);
-            [~, rmse7, ~, p7, ~]    = eval_GroupLPIV_noTrue([G G7], IRF_TRUE, GIRF7);
-            [~, rmse8, ~, p8, ~]    = eval_GroupLPIV_noTrue([G G8], IRF_TRUE, GIRF8);
-            
-            
-            Sim_Group{iRep,tt}   = [G1 G2 G3 G4 G5 G6 G7 G8];
-            Sim_Qpath{iRep,tt}   = [Qpath1*ones(ninit,1) Qpath2 Qpath3 Qpath4 Qpath5 Qpath6 Qpath7 Qpath8];
-            Sim_IRF{iRep, tt} = [GIRF1(p1,:);GIRF2(p2,:);GIRF3(p3,:);GIRF4(p4,:);GIRF5(p5,:);GIRF6(p6,:);GIRF7(p7,:);GIRF8(p8,:)];
-            Sim_GSE{iRep, tt} = [GSE1(p1,:);GSE2(p2,:);GSE3(p3,:);GSE4(p4,:);GSE5(p5,:);GSE6(p6,:);GSE7(p7,:);GSE8(p8,:)];
-            Sim_RMSE{iRep, tt} = [rmse1 rmse2 rmse3 rmse4 rmse5 rmse6 rmse7 rmse8];
-            
-            %% Benchmark: Panel LP
-            [b,~,~]=panel_LP1(Sim.reg, FE);
-            PAN_rmse(iRep,tt) = sqrt(mean( mean( (b - IRF_TRUE).^2)));
+            fprintf('Simulation# %d: IC = %d \n', iRep,gEst)
         end
         t1 = toc;
         fprintf('Grid finished. Time used: %f seconds.\n', t1)
         
     end
     
-    dataholder{jj,1} = Sim_Group;
-    dataholder{jj,2} = Sim_Qpath;
-    dataholder{jj,3} = Sim_IRF;
-    dataholder{jj,4} = Sim_GSE;
-    dataholder{jj,5} = Sim_RMSE;
-    dataholder{jj,6} = IND_rmse;
-    dataholder{jj,7} = PAN_rmse;
-    dataholder{jj,8} = IND_SE;
-    
+    dataholder{jj,1} = Sim_IRTrue;
+    dataholder{jj,2} = Sim_IRF;
+    dataholder{jj,3} = Sim_RMSE;
+    dataholder{jj,4} = Sim_OBJ;
+    dataholder{jj,5} = Sim_GEst;
 end
 
-save('output\SIM_NoTrueGroup.mat');
+save('output\SIM_NoGroup.mat');
 
-%% for tables
-% GLP RMSE
-[reshape(mean(cell2mat(dataholder{1,5})),8,3) reshape(mean(cell2mat(dataholder{2,5})),8,3) reshape(mean(cell2mat(dataholder{3,5})),8,3)]
-    
-% IND RMSE
-[mean(dataholder{1,6}) mean(dataholder{2,6}) mean(dataholder{3,6})]
-
-% PAN RMSE
-[mean(dataholder{1,7}) mean(dataholder{2,7}) mean(dataholder{3,7})]
+        
+%% RMSE
+[reshape(mean(cell2mat(dataholder{1,3})),10,3)...
+    reshape(mean(cell2mat(dataholder{2,3})),10,3) ...
+    reshape(mean(cell2mat(dataholder{3,3})),10,3)]
 
 
-% BIC
-% change jj to get results for different sample sizes
-jj = 3;
-N = Ngrid(jj);
-
-tmp = dataholder{jj,2};
-for t = 1:3
-    for iRep = 1:500
-        tmp{iRep,t} = min(tmp{iRep,t});
-    end
-end
-
-BIC = nan(500,3);
-for t = 1:3
-    T = Tgrid(t)-H;
-    for iRep = 1:500
-        tt = tmp{iRep,t};
-        bic = tt + tt(8).*[1:8] * (N+T)/(N*T) * log(N*T);
-        [~,BIC(iRep,t)] = min(bic);
-    end
-end
-mean(BIC)
+%% Estmated Group Number - IC
+[mean(dataholder{1,5}) mean(dataholder{2,5}) mean(dataholder{3,5})]
