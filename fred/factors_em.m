@@ -518,14 +518,14 @@ function r=onatski(X,rmax)
 %
 % =========================================================================
 % Part 1. Setup
-[N, T] = size(X);
+[T, N] = size(X);
 
 % compute the sample covariance matrix
 if N <= T
-    S = X*X'/T;
+    S = X'*X/T;
     minNT = N;
 else
-    S = X'*X/N;
+    S = X*X'/N;
     minNT = T;
 end
 
