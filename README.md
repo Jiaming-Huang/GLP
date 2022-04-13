@@ -125,7 +125,6 @@ for Ghat = 1:Gmax
             'FontSize',8,'Layer','top')
         hold off
     end
-    saveas(gcf,strcat('./output/EMP/EMP_',spec,'GIRF_G',num2str(Ghat),'.png'));
     % store ordered group classification
     gr_tmp = zeros(par.N,1);
     for g = 1:Ghat
