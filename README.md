@@ -154,11 +154,11 @@ It takes the following input:
 - `inference`: 1 - large T (re-estimate using identical weights); 2 - fixed T (re-estimate using identical weights); 3 - large T (raw weights)
 
 It gives the following output:
-- Gr_EST: Group composition, N by Gmax matrix
-- GIRF: Group IRF, 1 by Gmax cell, with K by 1 by G by H coefs
-- GSE: Group standard errors, 1 by Gmax cell, with K by 1 by G by H SE
-- OBJ: minimized objective function for each Ghat, 1 by Gmax vector
-- IC: Group IRF, K by H by Gmax matrix
+- `Gr_EST`: Group composition, N by Gmax matrix
+- `GIRF`: Group IRF, 1 by Gmax cell, with K by 1 by G by H coefs
+- `GSE`: Group standard errors, 1 by Gmax cell, with K by 1 by G by H SE
+- `OBJ`: minimized objective function for each Ghat, 1 by Gmax vector
+- `IC`: Group IRF, K by H by Gmax matrix
 
 
 **Note:** Notice that you can freely specify the set of variables of interest `reg.x` whose IRs are grouped and the set of nuisance variables `reg.c` whose IRs are unit-specific. Moreover, both x and c can be potentially endogenous, as long as we provide the corresponding instruments `reg.zx` and `reg.zc`.
