@@ -1,130 +1,82 @@
-function [b, se, F] = ind_LP(reg)
+function indOut = ind_LP(reg)
+% Equation by Equation Local Projection
 
 %% unpack variables
-LHS = reg.LHS;
-control = reg.control;
-x   = reg.x;
-z   = reg.z;
-T   = reg.param.T;
-N   = reg.param.N;
-H   = size(LHS,2);
-nwtrunc = reg.param.nwtrunc;
+LHS     = reg.LHS;
+x       = reg.x;
+c       = reg.c;
 
-b = nan(N,H);
-se = nan(N,H);
-F = nan(N,1);
-
-if isempty(z)
-    %fprintf('Model: Local Projection for each entity (without IV) \n')
-    if isempty(control)
-        for i = 1:N
-            % construct regression variables
-            Y = LHS(T*(i-1)+1:T*i,:);  %y(T*(i-1)+1:T*i,:)
-            X = [x(T*(i-1)+1:T*i,:)  ones(T,1)];
-            
-            bhat = (X'*X)\(X'*Y);
-            ehat = Y - X*bhat;
-            b(i,:) = bhat(1,:);
-            
-            % compute HAC SE
-            for h = 1:H
-                g = X.*repmat(ehat(:,h),1,size(X,2));
-                v_hac = ind_HAC(g,nwtrunc);
-                vbeta=(X'*X)\v_hac/(X'*X);
-                tmp = sqrt(diag(vbeta));
-                se(i,h) = tmp(1);
-            end
-            
-        end
-    else
-        for i = 1:N
-            % construct regression variables
-            Y = LHS(T*(i-1)+1:T*i,:);  %y(T*(i-1)+1:T*i,:)
-            X = [x(T*(i-1)+1:T*i,:)  ones(T,1) control(T*(i-1)+1:T*i,:)];
-            
-            bhat = (X'*X)\(X'*Y);
-            ehat = Y - X*bhat;
-            b(i,:) = bhat(1,:);
-            
-            % compute HAC SE
-            for h = 1:H
-                g = X.*repmat(ehat(:,h),1,size(X,2));
-                v_hac = ind_HAC(g,nwtrunc);
-                vbeta=(X'*X)\v_hac/(X'*X);
-                tmp = sqrt(diag(vbeta));
-                se(i,h) = tmp(1);
-            end
-            
-        end
-    end
-    F = [];
-    
-    
+if isfield(reg,'zc')
+    zc = reg.zc;
 else
-    %fprintf('Model: Local Projection for each entity (with IV) \n')
-    if isempty(control)
-        for i = 1:N
-            Y    = LHS(T*(i-1)+1:T*i,:);  % y(T*(i-1)+1:T*i,:)
-            X    = [x(T*(i-1)+1:T*i,:) ones(T,1)];
-            Z    = [z(T*(i-1)+1:T*i,:) ones(T,1)];
-            
-            % 2SLS
-            Xhat = Z*((Z'*Z)\(Z'*X)); % first stage
-            bhat = (Xhat'*Xhat)\(Xhat'*Y);
-            ehat = Y - X*bhat;
-            b(i,:) = bhat(1,:);
-            
-            % compute HAC SE
-            for h = 1:size(Y,2)
-                g = Xhat.*repmat(ehat(:,h),1,size(X,2));
-                v_hac = ind_HAC(g,nwtrunc);
-                vbeta=(Xhat'*Xhat)\v_hac/(Xhat'*Xhat);
-                tmp = sqrt(diag(vbeta));
-                se(i,h) = tmp(1);
-            end
-            
-            % Compute F-statistics
-            X = X(:,1);
-            gam = (Z'*Z)\(Z'*X);
-            uhat = X-Z*gam;
-            g = Z.*repmat(uhat,1,size(Z,2));
-            v_hac = ind_HAC(g,H+1);
-            vbeta=(Z'*Z)\v_hac/(Z'*Z);
-            tmp = sqrt(diag(vbeta));
-            F(i) = (gam(1)/tmp(1))^2;
-        end
-    else
-        for i = 1:N
-            Y    = LHS(T*(i-1)+1:T*i,:);  % y(T*(i-1)+1:T*i,:)
-            X    = [x(T*(i-1)+1:T*i,:) ones(T,1) control(T*(i-1)+1:T*i,:)];
-            Z    = [z(T*(i-1)+1:T*i,:) ones(T,1) control(T*(i-1)+1:T*i,:)];
-            
-            % 2SLS
-            Xhat = Z*((Z'*Z)\(Z'*X)); % first stage
-            bhat = (Xhat'*Xhat)\(Xhat'*Y);
-            ehat = Y - X*bhat;
-            b(i,:) = bhat(1,:);
-            
-            % compute HAC SE
-            for h = 1:size(Y,2)
-                g = Xhat.*repmat(ehat(:,h),1,size(X,2));
-                v_hac = ind_HAC(g,nwtrunc);
-                vbeta=(Xhat'*Xhat)\v_hac/(Xhat'*Xhat);
-                tmp = sqrt(diag(vbeta));
-                se(i,h) = tmp(1);
-            end
-            
-            % Compute F-statistics
-            X = X(:,1);
-            gam = (Z'*Z)\(Z'*X);
-            uhat = X-Z*gam;
-            g = Z.*repmat(uhat,1,size(Z,2));
-            v_hac = ind_HAC(g,H+1);
-            vbeta=(Z'*Z)\v_hac/(Z'*Z);
-            tmp = sqrt(diag(vbeta));
-            F(i) = (gam(1)/tmp(1))^2;
-        end
-    end
+    zc = reg.c;
+end
+if isfield(reg,'zx')
+    zx = reg.zx;
+else
+    zx = reg.x;
 end
 
+N       = reg.param.N;
+T       = reg.param.T;
+H       = size(LHS,2);
+K       = size(x,2);
+nwtrunc = reg.param.nwtrunc;
+
+Xall = [x c ones(N*T,1)];
+Zall = [zx zc ones(N*T,1)];
+
+%% Estimation
+Kall    = size(Xall,2); % K+P+1
+b       = nan(Kall,1,N,H);
+se      = nan(Kall,1,N,H);
+asymV   = nan(Kall,Kall,N,H);
+F       = nan(N,1);
+
+
+for i = 1:N
+    Y    = LHS(T*(i-1)+1:T*i,:);
+    X    = Xall(T*(i-1)+1:T*i,:);
+    Z    = Zall(T*(i-1)+1:T*i,:);
+
+    % 2SLS
+    Xhat = Z*((Z'*Z)\(Z'*X)); % first stage
+    bhat = (Xhat'*Xhat)\(Xhat'*Y);
+    ehat = Y - X*bhat;
+    b(:,:,i,:) = bhat;
+
+    % compute HAC SE
+    for h = 1:H
+        g              = Xhat.*repmat(ehat(:,h),1,size(X,2));
+        v_hac          = HAC(g,nwtrunc);
+        vbeta          = (Xhat'*Xhat)\v_hac/(Xhat'*Xhat);
+        se(:,:,i,h)    = sqrt(diag(vbeta));
+        asymV(:,:,i,h) = vbeta;
+    end
+
+    % Compute F-statistics
+    X     = X(:,K);
+    gam   = (Z'*Z)\(Z'*X);
+    uhat  = X-Z*gam;
+    g     = Z.*repmat(uhat,1,size(Z,2));
+    v_hac = HAC(g,H+1);
+    vbeta = (Z'*Z)\v_hac/(Z'*Z);
+    tmp   = sqrt(diag(vbeta));
+    F(i)  = (gam(1)/tmp(1))^2;
+end
+
+%% Store output
+IR           = b(1:K,:,:,:);
+IRse         = se(1:K,:,:,:);
+IRUb         = IR + 1.96*IRse;
+IRLb         = IR - 1.96*IRse;
+
+indOut.IR    = IR;
+indOut.IRUb  = IRUb;
+indOut.IRLb  = IRLb;
+indOut.IRse  = IRse;
+indOut.b     = b;
+indOut.se    = se;
+indOut.asymV = asymV;
+indOut.F     = F;
 end

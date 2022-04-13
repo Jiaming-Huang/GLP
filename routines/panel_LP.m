@@ -1,11 +1,14 @@
-function [b, se] = panel_LP(reg, method)
+function panOut = panel_LP(reg, FE)
 % Standard Panel Local Projection (Pooled)
+% b_hat =  [ (\sum_i Xi'Z_i)S(\sum_i Zi'Xi) ]\ [ (\sum_i Xi'Z_i)S(\sum_i Zi'Yi) ]
 % reference: Jorda and Taylor EJ (2016)
 
 % Input
 % reg contains x y (z) LHS control and params
-% method = 0, random effects (OLS)
-%        = 1, fixed effects (demean)
+% FE = 0, first difference (OLS) the data should be already differenced!!
+%    = 1, fixed effects (demean)
+%    = 2, random effects (OLS)
+% difference b/w FD and RE is that FD is estimated without constant term
 % workflow:
 % prepare the data -> OLS/2SLS -> compute HAC -> (compute First stage F)
 
@@ -13,96 +16,83 @@ function [b, se] = panel_LP(reg, method)
 % see the stata file in output\APPEN\compare_panel_lp
 
 %% unpack variables
-LHS = reg.LHS;
-X   = reg.x;
-Z   = reg.z;
-control = reg.control;
+LHS     = reg.LHS;
+x       = reg.x;
+c       = reg.c;
 
-N = reg.param.N;
-T = reg.param.T;
-H = size(LHS,2);
-P = size(control,2);
-
-
-if isempty(Z)
-    %     fprintf('Model: Panel Local Projection (without IV)\n')
-    if method == 1
-        %===================== Step 1 : demean =======================%
-        tmp    = [LHS X control];
-        tmp_de = gdemean(tmp,N,T);
-        LHS    = tmp_de(:,1:H);
-        X      = tmp_de(:,H+1:H+1);
-        if P~=0
-            control = tmp_de(:,H+2:H+1+P);
-            X = [X control];
-        end
-    end
-    %===================== Step 2 : OLS =======================%
-    bhat = (X'*X)\(X'*LHS);
-    e    = LHS - X*bhat;
-    b    = bhat(1,:);
-    
-    %=============== Step 3 : Robust Standard Errors =================%
-    se   = nan(1,H);
-    Qxx  = (X'*X);
-    for h = 1:H
-        g     = X.*repmat(e(:,h),1,size(X,2));
-        Sigma = panel_HAC(g,N,T);
-        vbeta = Qxx\Sigma/Qxx;
-        tmp   = sqrt(diag(vbeta));
-        se(h) = tmp(1);
-    end
-    
-    
+if isfield(reg,'zx')
+    zx = reg.zx;
 else
-    %fprintf('Model: Panel Local Projection (with IV)\n')
-    if method==1
-        %===================== Step 1 : demean =======================%
-        tmp    = [LHS X control];
-        tmp_de = gdemean(tmp,N,T);
-        LHS    = tmp_de(:,1:H);
-        X      = tmp_de(:,H+1);
-        if P~=0
-            control = tmp_de(:,H+2:H+1+P);
-        end
-    end
-    Z = [Z control];
-    X = [X control];
-    %=====================   Step 2 : TSLS   =======================%
-    W = inv(Z'*Z);
-    bhat = (X'*Z*W*Z'*X)\(X'*Z*W*Z'*LHS);
-    e    = LHS - X*bhat;
-    b = bhat(1,:);
-    
-    %=============== Step 3 : Robust Standard Errors =================%
-    % Cameron and Miller - JHR (2015)
-    % see equation (30)
-    se   = nan(1,H);
-    Qxx  = (X'*Z*W*Z'*X);
-    for h = 1:H
-        % cluster at individual level
-        Zep = Z.*e(:,h);
-        Sigma = X'*Z*W*panel_HAC(Zep,N,T)*W*Z'*X;
-        vbeta = Qxx\Sigma/Qxx;
-        tmp = sqrt(diag(vbeta));
-        se(h) = tmp(1);
-    end
+    zx = reg.x;
+end
+if isfield(reg,'zc')
+    zc = reg.zc;
+else
+    zc = reg.c;
 end
 
+N       = reg.param.N;
+T       = reg.param.T;
+H       = size(LHS,2);
+K       = size(x,2);
+P       = size(c,2);
 
+%% Preprocessing
+if FE == 1
+    % fixed effects: demean
+    tmp    = [LHS x c zx zc];
+    tmp_de = gdemean(tmp,N,T);
+    LHS    = tmp_de(:,1:H);
+    X      = tmp_de(:,H+1:H+K+P);
+    Z      = tmp_de(:,H+K+P+1:end);
+elseif FE == 0
+    % random effects: add constant to c
+    X = [x c ones(N*T,1)];
+    Z = [zx zc ones(N*T,1)];
+else
+    % FD: we require all variables have been differenced
+    X = [x c];
+    Z = [zx zc];
 end
 
-function x_de = gdemean(x,N,T)
-% designed for balanced panel
-x_de = nan(size(x,1),size(x,2));
-for i = 1: N
-    % for each unit
-    xi = x(T*(i-1)+1:T*i,:);
-    x_mean = mean(xi);
-    x_de(T*(i-1)+1:T*i,:) = xi - repmat(x_mean,T,1);
-end
+Kall    = size(X,2);
+
+%% Estimation: 2SLS
+S      = inv(Z'*Z);
+bhat   = (X'*Z*S*Z'*X)\(X'*Z*S*Z'*LHS);
+e      = LHS - X*bhat;
+se     = nan(Kall,H);
+asymV  = nan(Kall,Kall,H);
+
+% Cameron and Miller - JHR (2015)
+% see equation (30)
+Qxx  = (X'*Z*S*Z'*X);
+for h = 1:H
+    % cluster at individual level
+    Zep           = Z.*e(:,h);
+    Sigma         = X'*Z*S*panel_HAC(Zep,N,T)*S*Z'*X;
+    vbeta         = Qxx\Sigma/Qxx;
+    se(:,h)       = sqrt(diag(vbeta));
+    asymV(:,:,h)  = vbeta;
 end
 
+%% Store output
+IR            = nan(K,1,1,H);
+IR(:,:,1,:)   = bhat(1:K,:);
+IRse          = nan(K,1,1,H);
+IRse(:,:,1,:) = se(1:K,:);
+IRUb          = IR + 1.96*IRse;
+IRLb          = IR - 1.96*IRse;
+
+panOut.IR     = IR;
+panOut.IRse   = IRse;
+panOut.IRUb   = IRUb;
+panOut.IRLb   = IRLb;
+panOut.b      = bhat;
+panOut.se     = se;
+panOut.asymV  = asymV;
+
+end
 
 function Sigma = panel_HAC(Xu,N,T)
 %{
