@@ -12,7 +12,7 @@ function [Gr_EST, GIRF, GSE, OBJ, IC] = GLP(reg, Gmax, nInit, bInit, weight, FE,
 %           for simplicity, the program is written for balanced panel, but can be easily adapted to unbalanced ones
 %   Gmax: number of groups to be classified
 %   nInit: number of initializations
-%   bInit: potential initial values, see blow
+%   bInit: potential initial values, see below
 %   weight: either string ('2SLS', 'IV') or user-supplied weights;
 %   FE: 1 - fixed effects (within estimator, demean)
 %   inference: 1 - large T (IV); 2 - fixed T (IV); 3 - large T (Raw)

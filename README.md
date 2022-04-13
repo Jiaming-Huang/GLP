@@ -1,6 +1,6 @@
 # GLP
 
-This repository contains the code and data for “Group Local Projection”. You can find the latest draft and supplemental materials on my [webpage](https://sites.google.com/view/jiaminghuang/research).
+This repository contains the code and data for “Group Local Projection”. You can find the latest draft and supplemental materials on my [webpage](https://sites.google.com/view/jiaminghuang/research), and download the raw output files [here](https://drive.google.com/drive/folders/1IkUqq9W63jpVldTVuE1vFrQMuVP8ZttX?usp=sharing).
 
 Feel free to contact me ([jiaming.huang@barcelonagse.eu](jiaming.huang@barcelonagse.eu)) if you have any doubts on implementing the codes.
 
@@ -50,7 +50,7 @@ You need to:
 
 1. Prepare your data (balanced panel) in long format
 
-2. Specify your model (see below an example):
+2. Specify your model (see below for an example):
 
 ```matlab
 FE = 1;                % unit fixed effects - 1; random effects - 0
@@ -69,7 +69,7 @@ par.end   = '2007-12-01';
 reg = preEmpData(data, par); % now you have your reg (struct variable) 
 ```
 
-1. Supply the data struct to `GLP.m`. Before that, it is recommended to run individual LP-IV (to get initial guesses), you can otherwise specify your own guesses (and weight matrix).
+3. Supply the data struct to `GLP.m`. Before that, it is recommended to run individual LP-IV (to get initial guesses), you can otherwise specify your own guesses (and weight matrix).
 
 ```matlab
 indOut = ind_LP(reg);  % individual LP-IV
@@ -83,6 +83,86 @@ inference = 1;          % large T inference, with mixed weighting scheme (See SM
 
 ```
 
+4. After the GLP estimation, we first look at the number of groups selected by IC
+
+```matlab
+figure;
+plot(IC,'b-s','LineWidth',2,'MarkerSize',5,...
+    'MarkerEdgeColor','blue',...
+    'MarkerFaceColor','blue');
+xlabel('Number of Groups');
+```
+
+5. Then we can examine the IRs (e.g. relabel them according to positiveness)
+
+```matlab
+% store relabeled group assignment
+Group_relabel = nan(par.N,Gmax);
+for Ghat = 1:Gmax
+    girf   = squeeze(GIRF{1,Ghat});
+    gse    = squeeze(GSE{1,Ghat});
+    Ub_GLP = girf + 1.96*gse;
+    Lb_GLP = girf - 1.96*gse;
+
+    % order ir by average positiveness
+    [~,ord] = sort(mean(girf,2),'descend');
+    figure;
+    for g = 1:Ghat
+        subplot(ceil(Ghat/2),2,g);
+        k = ord(g);
+        hold on;
+        % bands
+        fill([1:H, fliplr(1:H)],...
+            [Ub_GLP(k,:) fliplr(Lb_GLP(k,:))],...
+            BandColors,'EdgeColor','none');
+        % IR
+        plot(1:H, girf(k,:),'LineWidth',1.2,'color',LineColors);
+
+        yline(0,'k','LineWidth',.7);
+        xlabel(strcat({'Group'},{' '},num2str(g)));
+        xlim([1 H]); axis tight
+        set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+            'FontSize',8,'Layer','top')
+        hold off
+    end
+    saveas(gcf,strcat('./output/EMP/EMP_',spec,'GIRF_G',num2str(Ghat),'.png'));
+    % store ordered group classification
+    gr_tmp = zeros(par.N,1);
+    for g = 1:Ghat
+        gr_tmp = gr_tmp +(Gr_EST(:,Ghat) == ord(g) )*g;
+    end
+    Group_relabel(:,Ghat) = gr_tmp; % store it for later output
+end
+```
+
+## The `GLP.m` function
+
+The `GLP.m` is a ready-to-use function for implementing the GLP. It is written for balanced panel with exact identification (L=K).
+
+It takes the following input:
+- `reg`: data (reg.LHS, reg.x, reg.c, reg.zx, reg.zc, reg.param)
+  - `reg.LHS` NT by H dependent variables
+  - `reg.x`, NT by K policy variables whose coefs are to be grouped
+  - `reg.zx`, NT by Lx IV for reg.x (optional, use reg.x if not specified)
+  - `reg.c`, NT by P controls whose coefs vary across i (can be empty)
+  - `reg.zc` NT by Lc IV for reg.c (optional, use reg.c if not specified)
+  - `reg.param.N`, `reg.param.T`
+- `Gmax`: maximal number of groups to be classified
+- `nInit`: number of initializations
+- `bInit`: potential initial values, it is recommended to use IR estimates from individual LP-IV (`ind_LP.m`) as initial guess, but you can specify your own guess
+- `weight`: either string ('2SLS', 'IV') or user-supplied weights; it is recommended to use the inverse of the asymptotic variance from the individual LP-IV for group estimation, and then use identical weights to re-estimate IRs (see Supplementary Material S1.3 for more details)
+- `FE`: 1 - fixed effects (within estimator, demean)
+- `inference`: 1 - large T (re-estimate using identical weights); 2 - fixed T (re-estimate using identical weights); 3 - large T (raw weights)
+
+It gives the following output:
+- Gr_EST: Group composition, N by Gmax matrix
+- GIRF: Group IRF, 1 by Gmax cell, with K by 1 by G by H coefs
+- GSE: Group standard errors, 1 by Gmax cell, with K by 1 by G by H SE
+- OBJ: minimized objective function for each Ghat, 1 by Gmax vector
+- IC: Group IRF, K by H by Gmax matrix
+
+
+**Note:** Notice that you can freely specify the set of variables of interest `reg.x` whose IRs are grouped and the set of nuisance variables `reg.c` whose IRs are unit-specific. Moreover, both x and c can be potentially endogenous, as long as we provide the corresponding instruments `reg.zx` and `reg.zc`.
 
 ## References
 Huang, J. (2021). Group Local Projections.

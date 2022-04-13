@@ -18,7 +18,7 @@ function [Gr_EST, GIRF, OBJ, IC] = GLP_SIM_UnknownG0(reg, Gmax, nInit, bInit, we
 %           for simplicity, the program is written for balanced panel, but can be easily adapted to unbalanced ones
 %   Gmax: number of groups to be classified
 %   nInit: number of initializations
-%   bInit: potential initial values, see blow
+%   bInit: potential initial values, see below
 %   weight: either string ('2SLS', 'IV') or user-supplied weights;
 %   FE: 1 - fixed effects (within estimator, demean)
 
