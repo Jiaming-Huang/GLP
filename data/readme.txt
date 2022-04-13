@@ -9,7 +9,6 @@ FRED-MD.csv: monthly macro series from FRED-MD database
 historicalweeklydata.xls: FRM 30 from Freddie Mac
 
 Intermediate output:
-HPI.csv: house price index
 macro.csv: selected macro series
 FRM30.csv: weekly FRM30
 
@@ -22,17 +21,11 @@ From input to intermediate output it's simple; from intermediate to final output
 Part 2: MSA features
 
 Input:
-Group_EST.csv: estimated group membership by the GLP
+MSA_list.csv: estimated group membership by the GLP
 EconProfile_MSA.csv: CAINC30 Economic Profile from BEA
 GDP_MSA.csv: Real GDP, from BEA
 household-debt-by-msa.csv: household debt-to-income ratio, from FED
-SUPPLYDATA.zip: Wharton regulation index & supply elasiticity from Saiz (http://real.wharton.upenn.edu/~saiz/)
-
-Intermediate output:
-EconProfile_MSA.csv
-GDP_MSA.csv
-household-debt-by-msa.csv
-SUPPLYDATA.dta
+SUPPLYDATA.dta: Wharton regulation index & supply elasiticity from Saiz (http://real.wharton.upenn.edu/~saiz/)
 
 Output:
 MSA_group_feature.csv
