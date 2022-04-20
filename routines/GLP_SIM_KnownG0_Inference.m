@@ -92,6 +92,7 @@ xp = permute(reshape(x',K,T,N),[2,1,3]); % T by K by N
 cp = permute(reshape(c',P,T,N),[2,1,3]); % T by P by N
 yp = reshape(LHS,T,1,N,H); % T by 1 by N by H
 zx = pagemtimes(zp,xp); % L by K by N
+xz = pagetranspose(zx); % K by L by N
 zc = pagemtimes(zp,cp); % L by P by N
 cz = permute(zc,[2,1,3]);
 zy = pagemtimes(zp,yp); % L by 1 by N by H
@@ -111,25 +112,14 @@ else
 end
 
 %% PREPARE VARIABLES FOR ESTIMATION
-R = nan(size(OMEGA));
-for i = 1:N
-    for h = 1:H
-        R(:,:,i,h) = chol(OMEGA(:,:,i,h));
-    end
-end
-rzc = pagemtimes(R,zc);
-czr = permute(rzc,[2,1,3,4]);
 czo = pagemtimes(cz,OMEGA);
-rzx = pagemtimes(R,zx);
-xzr = permute(rzx,[2,1,3,4]);
-rzy = pagemtimes(R,zy);
-
 czozc = pagemtimes(czo,zc);  % P by P by N by H
 czozy = pagemtimes(czo,zy);
 czozx = pagemtimes(czo,zx);
-M = eye(L) - pagemtimes(rzc,pagemldivide(czozc,czr));
-xzrmrzx = pagemtimes(pagemtimes(xzr,M),rzx);
-xzrmrzy = pagemtimes(pagemtimes(xzr,M),rzy);
+M = OMEGA - pagemtimes(czo,'transpose',pagemldivide(czozc,czo),'none');
+xzm = pagemtimes(xz,M);
+xzmzx =  pagemtimes(xzm,zx);
+xzmzy =  pagemtimes(xzm,zy);
 
 
 
@@ -147,9 +137,9 @@ else % main algorithm starts here
 
         %% STEP 1: Assignment
         di = nan(N, G0); % store the Euclidean distance b/w y and Xb for each b
+        cphi = pagemtimes(cp,phi_old);
         for i = 1:G0
             xb = pagemtimes(xp,ir_old(:,:,i,:));
-            cphi = pagemtimes(cp,phi_old);
             e = yp -xb -cphi;
             ze = pagemtimes(zp,e);
             tmp = pagemtimes(pagemtimes(ze,'transpose',OMEGA,'none'),ze);
@@ -174,10 +164,10 @@ else % main algorithm starts here
             czozc_tmp = czozc(:,:,Gr==g,:);
             czozy_tmp = czozy(:,:,Gr==g,:);
             czozx_tmp = czozx(:,:,Gr==g,:);
-            xzrmrzx_tmp = sum(xzrmrzx(:,:,Gr==g,:),3);
-            xzrmrzy_tmp = sum(xzrmrzy(:,:,Gr==g,:),3);
+            xzmzx_tmp = sum(xzmzx(:,:,Gr==g,:),3);
+            xzmzy_tmp = sum(xzmzy(:,:,Gr==g,:),3);
 
-            ir_new(:,:,g,:) = pagemldivide(xzrmrzx_tmp,xzrmrzy_tmp);
+            ir_new(:,:,g,:) = pagemldivide(xzmzx_tmp,xzmzy_tmp);
             phi_new(:,:,Gr==g,:) = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,ir_new(:,:,g,:)));
 
             xb = pagemtimes(xp_tmp, ir_new(:,:,g,:));
@@ -212,20 +202,14 @@ end
 
 %% Inference: mixed with IV weighting matrix
 OMEGA = repmat(eye(L,L),1,1,N,H);
-R = OMEGA;
-rzc = pagemtimes(R,zc);
 czo = pagemtimes(cz,OMEGA);
 czozc = pagemtimes(czo,zc);  % P by P by N by H
 czozy = pagemtimes(czo,zy);
 czozx = pagemtimes(czo,zx);
-M = eye(L) - pagemtimes(pagemrdivide(rzc,czozc),'none',rzc,'transpose');
-rzx = pagemtimes(R,zx);
-xzr = pagetranspose(rzx);
-rzy = pagemtimes(R,zy);
-
-xzrmr = pagemtimes(pagemtimes(xzr,M),R);
-xzrmrzx = pagemtimes(pagemtimes(xzr,M),rzx);
-xzrmrzy = pagemtimes(pagemtimes(xzr,M),rzy);
+M = OMEGA - pagemtimes(czo,'transpose',pagemldivide(czozc,czo),'none');
+xzm = pagemtimes(xz,M);
+xzmzx =  pagemtimes(xzm,zx);
+xzmzy =  pagemtimes(xzm,zy);
 
 %% Large T
 GSE  = nan(K,1,G0,H);
@@ -237,11 +221,11 @@ for g = 1:G0
     czozc_tmp = czozc(:,:,Gr_EST==g,:);
     czozy_tmp = czozy(:,:,Gr_EST==g,:);
     czozx_tmp = czozx(:,:,Gr_EST==g,:);
-    xzrmr_tmp = xzrmr(:,:,Gr_EST==g,:);
-    xzrmrzx_tmp = sum(xzrmrzx(:,:,Gr_EST==g,:),3);
-    xzrmrzy_tmp = sum(xzrmrzy(:,:,Gr_EST==g,:),3);
+    xzm_tmp   = xzm(:,:,Gr_EST==g,:);
+    xzmzx_tmp = sum(xzmzx(:,:,Gr_EST==g,:),3);
+    xzmzy_tmp = sum(xzmzy(:,:,Gr_EST==g,:),3);
 
-    GIRF(:,:,g,:) = pagemldivide(xzrmrzx_tmp,xzrmrzy_tmp);
+    GIRF(:,:,g,:) = pagemldivide(xzmzx_tmp,xzmzy_tmp);
     phi = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,GIRF(:,:,g,:)));
 
     xb = pagemtimes(xp_tmp, GIRF(:,:,g,:));
@@ -249,12 +233,12 @@ for g = 1:G0
     e_tmp = yp_tmp - xb - cphi;
 
     % Sigma_g
-    Sigma_g = xzrmrzx_tmp;
+    Sigma_g = xzmzx_tmp;
     % V_i,h
     ze_tmp = zpt(:,:,Gr_EST==g).*e_tmp;
     V_ih   = HAC4d(ze_tmp,H+1);
     % Psi_g
-    Psi_g = sum(pagemtimes(pagemtimes(xzrmr_tmp,V_ih),'none',xzrmr_tmp,'transpose'),3);
+    Psi_g = sum(pagemtimes(pagemtimes(xzm_tmp,V_ih),'none',xzm_tmp,'transpose'),3);
 
     V = pagemrdivide(pagemldivide(Sigma_g,Psi_g),Sigma_g);
     GSE(:,:,g,:) = sqrt(V);
@@ -274,8 +258,8 @@ for g = 1:G0
     czozc_tmp = czozc(:,:,Gr_EST==g,:);
     czozy_tmp = czozy(:,:,Gr_EST==g,:);
     czozx_tmp = czozx(:,:,Gr_EST==g,:);
-    xzrmr_tmp = xzrmr(:,:,Gr_EST==g,:);
-    xzrmrzx_tmp = sum(xzrmrzx(:,:,Gr_EST==g,:),3);
+    xzm_tmp = xzm(:,:,Gr_EST==g,:);
+    xzmzx_tmp = sum(xzmzx(:,:,Gr_EST==g,:),3);
     phi = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,GIRF(:,:,g,:)));
 
     xb = pagemtimes(xp_tmp, GIRF(:,:,g,:));
@@ -284,12 +268,12 @@ for g = 1:G0
     e_tmp = ytil(:,:,Gr_EST==g,:) - xb;
     
     % Gamma
-    Gam_tmp(:,:,H*(g-1)+1:H*g) = reshape(xzrmrzx_tmp,K,K,H);
+    Gam_tmp(:,:,H*(g-1)+1:H*g) = reshape(xzmzx_tmp,K,K,H);
     % V
     ze_tmp = zpt(:,:,Gr_EST==g).*e_tmp;
     for l = 1:H
         zeez_tmp = pagemtimes(ze_tmp(:,:,:,l),'transpose',ze_tmp(:,:,:,l:end),'none');
-        Psi_tmp = sum(pagemtimes(pagemtimes(xzrmr_tmp(:,:,:,l),zeez_tmp),'none',xzrmr_tmp(:,:,:,l:end),'transpose'),3);
+        Psi_tmp = sum(pagemtimes(pagemtimes(xzm_tmp(:,:,:,l),zeez_tmp),'none',xzm_tmp(:,:,:,l:end),'transpose'),3);
         V_j(K*(l-1)+1:K*l,K*(l-1)+1:end)=reshape(Psi_tmp,K,K*(H-l+1));
     end
     
@@ -305,14 +289,14 @@ zytil = pagemtimes(zp,ytil); % L by 1 by N by H
 xzozytil = pagemtimes(zx,'transpose',pagemtimes(OMEGA,zytil),'none');
 for j = 1:G0
     % xzrmr(zy-zx*b_jl) K by 1 by N by H
-    part_jl = xzrmrzy - pagemtimes(xzrmrzx,GIRF(:,:,j,:));
+    part_jl = xzmzy - pagemtimes(xzmzx,GIRF(:,:,j,:));
     for k = 1:G0
         if j==k
             f_ijg = zeros(1,G0,N);
             v_jg_m = zeros(K,G0,N,H);
             for g = setdiff([1:G0],j)
                 IR_dif= GIRF(:,:,g,:)-GIRF(:,:,j,:);
-                dist = reshape(sum(pagemtimes(IR_dif,'transpose',2*xzrmrzy - pagemtimes(xzrmrzx,GIRF(:,:,j,:)+GIRF(:,:,g,:)),'none'),4),N,1);
+                dist = reshape(sum(pagemtimes(IR_dif,'transpose',2*xzmzy - pagemtimes(xzmzx,GIRF(:,:,j,:)+GIRF(:,:,g,:)),'none'),4),N,1);
                 bw   = std(dist)*1.06*N^(-0.2);
                 f_ijg(1,g,:)  = normpdf(dist/bw)/bw .* (Gr_EST == j | Gr_EST ==g);
 
@@ -333,7 +317,7 @@ for j = 1:G0
             end
         else
             IR_dif= GIRF(:,:,k,:)-GIRF(:,:,j,:);
-            dist = reshape(sum(pagemtimes(IR_dif,'transpose',2*xzrmrzy - pagemtimes(xzrmrzx,GIRF(:,:,j,:)+GIRF(:,:,k,:)),'none'),4),N,1);
+            dist = reshape(sum(pagemtimes(IR_dif,'transpose',2*xzmzy - pagemtimes(xzmzx,GIRF(:,:,j,:)+GIRF(:,:,k,:)),'none'),4),N,1);
             bw   = std(dist)*1.06*N^(-0.2);
             f_ijk = nan(1,1,N);
             f_ijk(1,1,:)  = normpdf(dist/bw)/bw .* (Gr_EST == j | Gr_EST ==g);
