@@ -24,14 +24,12 @@ function [Gr_EST, GIRF, GSE] = GLP_SIM_KnownG0(reg, G0, bxInit, bcInit, weight, 
 %   G0: (true) number of groups
 %   bxInit: initial value for beta_x (here we use the true IRs)
 %   bcInit: initial value for beta_c (here we use the coef estimates from IND_LP)
-%   weight: can be string ('2SLS', 'IV') or user-supplied weighting;
-%           default: mixed weighting (unit-horizon specific & identity)
+%   weight: either string ('2SLS', 'IV') or user-supplied weights;
+%           default: inverse of the covariance matrix of moment conditions (averaged over h)
 %                   see Sec S1.3 for details
 %   FE: 1 - fixed effects (within estimator, demean)
-%   inference: 1 - large T (mixed with IV); 
-%              2 - fixed T (mixed with IV); 
-%              3 - large T (raw weight)
-%              4 - fixed T (raw weight)
+%   inference: 1 - large T
+%              2 - fixed T
 
 
 % --------------------------- OUTPUT --------------------------------
@@ -41,7 +39,7 @@ function [Gr_EST, GIRF, GSE] = GLP_SIM_KnownG0(reg, G0, bxInit, bcInit, weight, 
 
 % when weight, FE, inference are not supplied
 % by default we use:
-% 1) inverse of asym.variance as weighting matrix
+% 1) inverse of the covariance matrix of moment conditions (averaged over h)
 % 2) FE
 % 3) large T inference
 
@@ -79,24 +77,17 @@ z      = [zx zc];
 % data dimensions
 N       = reg.param.N;
 T       = reg.param.T;
+
+if FE == 1
+    c = [c ones(N*T,1)];
+    z = [z ones(N*T,1)];
+end
+
+% variable dimension
 H       = size(LHS,2);
 K       = size(x,2);
 P       = size(c,2);
 L       = size(z,2);
-
-% estimation params
-tol     = 1e-6;
-nIter   = 1000;  % by default, number of iteration should be less than 100
-
-if FE == 1
-    % demean variables for FE estimation
-    tmp    = [LHS x c z];
-    tmp_de = gdemean(tmp,N,T);
-    LHS    = tmp_de(:,1:H);
-    x      = tmp_de(:,H+1:H+K);
-    c      = tmp_de(:,H+K+1:H+K+P);
-    z      = tmp_de(:,H+K+P+1:end);
-end
 
 % Reshape variables, for later usage
 zp = reshape(z',L,T,N); % L by T by N
@@ -134,7 +125,9 @@ xzm = pagemtimes(xz,M);
 xzmzx = pagemtimes(xzm,zx);
 xzmzy = pagemtimes(xzm,zy);
 
-
+%% ITERATION PARAMS
+tol     = 1e-6;
+nIter   = 1000;  % by default, number of iteration should be less than 100
 
 %% ESTIMATION
 if G0 == 1   % Trivial case, single group
@@ -220,22 +213,8 @@ end
 
 %% Inference
 if inference == 1
-    %% Large T, mixed with IV weighting matrix
+    % Large T
     GSE = nan(K,1,G0,H);
-    %     zz  = pagemtimes(zp,'none',zp,'transpose')/T; % L by L by N
-    %     OMEGA = repmat(pageinv(zz),1,1,1,H);
-    %     [U,S,~]=pagesvd(OMEGA,'vector');
-    %     R = sqrt(S).*pagectranspose(U);
-    OMEGA = repmat(eye(L,L),1,1,N,H);
-    czo = pagemtimes(cz,OMEGA);
-    czozc = pagemtimes(czo,zc);  % P by P by N by H
-    czozy = pagemtimes(czo,zy);
-    czozx = pagemtimes(czo,zx);
-    M = OMEGA - pagemtimes(czo,'transpose',pagemldivide(czozc,czo),'none');
-    xzm = pagemtimes(xz,M);
-    xzmzx =  pagemtimes(xzm,zx);
-    xzmzy =  pagemtimes(xzm,zy);
-
     for g = 1:G0
         yp_tmp = yp(:,:,Gr_EST==g,:);
         xp_tmp = xp(:,:,Gr_EST==g);
@@ -245,9 +224,6 @@ if inference == 1
         czozx_tmp = czozx(:,:,Gr_EST==g,:);
         xzm_tmp   = xzm(:,:,Gr_EST==g,:);
         xzmzx_tmp = sum(xzmzx(:,:,Gr_EST==g,:),3);
-        xzmzy_tmp = sum(xzmzy(:,:,Gr_EST==g,:),3);
-
-        GIRF(:,:,g,:) = pagemldivide(xzmzx_tmp,xzmzy_tmp);
         phi = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,GIRF(:,:,g,:)));
 
         xb = pagemtimes(xp_tmp, GIRF(:,:,g,:));
@@ -265,21 +241,9 @@ if inference == 1
         V = pagemrdivide(pagemldivide(Sigma_g,Psi_g),Sigma_g);
         GSE(:,:,g,:) = sqrt(V);
     end
-
-elseif inference == 2
-    %% Fixed T, , mixed with IV weighting matrix
-    %     zz  = pagemtimes(zp,'none',zp,'transpose')/T; % L by L by N
-    %     OMEGA = repmat(pageinv(zz),1,1,1,H);
-    OMEGA = repmat(eye(L,L),1,1,N,H);
-    czo = pagemtimes(cz,OMEGA);
-    czozc = pagemtimes(czo,zc);  % P by P by N by H
-    czozy = pagemtimes(czo,zy);
-    czozx = pagemtimes(czo,zx);
-    M = OMEGA - pagemtimes(czo,'transpose',pagemldivide(czozc,czo),'none');
-    xzm = pagemtimes(xz,M);
-    xzmzx = pagemtimes(xzm,zx);
-    xzmzy = pagemtimes(xzm,zy);
-
+else
+    %% Inference: Fixed T
+    % STEP 1: ESTIMATE V & GAMMA (DIAGONAL)
     V = zeros(K*G0*H);
     Gam_tmp = zeros(K,K,H*G0);
     V_j = zeros(K*H);
@@ -293,9 +257,6 @@ elseif inference == 2
         czozx_tmp = czozx(:,:,Gr_EST==g,:);
         xzm_tmp = xzm(:,:,Gr_EST==g,:);
         xzmzx_tmp = sum(xzmzx(:,:,Gr_EST==g,:),3);
-        xzmzy_tmp = sum(xzmzy(:,:,Gr_EST==g,:),3);
-
-        GIRF(:,:,g,:) = pagemldivide(xzmzx_tmp,xzmzy_tmp);
         phi = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,GIRF(:,:,g,:)));
 
         xb = pagemtimes(xp_tmp, GIRF(:,:,g,:));
@@ -330,7 +291,7 @@ elseif inference == 2
             if j==k
                 f_ijg = zeros(1,G0,N);
                 v_jg_m = zeros(K,G0,N,H);
-                for g = setdiff([1:G0],j)
+                for g = setdiff(1:G0,j)
                     IR_dif= GIRF(:,:,g,:)-GIRF(:,:,j,:);
                     dist = reshape(sum(pagemtimes(IR_dif,'transpose',2*xzmzy - pagemtimes(xzmzx,GIRF(:,:,j,:)+GIRF(:,:,g,:)),'none'),4),N,1);
                     bw   = std(dist)*1.06*N^(-0.2);
@@ -381,137 +342,6 @@ elseif inference == 2
     end
 
     GSE = permute(reshape(diag(sqrt(Gam\V/Gam)),K,H,G0),[1,4,3,2]);
-
-elseif inference == 3
-    % Large T, raw weighting matrix
-    GSE = nan(K,1,G0,H);
-    for g = 1:G0
-        yp_tmp = yp(:,:,Gr_EST==g,:);
-        xp_tmp = xp(:,:,Gr_EST==g);
-        cp_tmp = cp(:,:,Gr_EST==g);
-        czozc_tmp = czozc(:,:,Gr_EST==g,:);
-        czozy_tmp = czozy(:,:,Gr_EST==g,:);
-        czozx_tmp = czozx(:,:,Gr_EST==g,:);
-        xzm_tmp = xzm(:,:,Gr_EST==g,:);
-        xzmzx_tmp = sum(xzmzx(:,:,Gr_EST==g,:),3);
-        phi = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,GIRF(:,:,g,:)));
-
-        xb = pagemtimes(xp_tmp, GIRF(:,:,g,:));
-        cphi = pagemtimes(cp_tmp,phi);
-        e_tmp = yp_tmp - xb - cphi;
-
-        % Sigma_g
-        Sigma_g = xzmzx_tmp;
-        % V_i,h
-        ze_tmp = zpt(:,:,Gr_EST==g).*e_tmp;
-        V_ih   = HAC4d(ze_tmp,H+1);
-        % Psi_g
-        Psi_g = sum(pagemtimes(pagemtimes(xzm_tmp,V_ih),'none',xzm_tmp,'transpose'),3);
-
-        V = pagemrdivide(pagemldivide(Sigma_g,Psi_g),Sigma_g);
-        GSE(:,:,g,:) = sqrt(V);
-    end
-else
-    %% Inference: Fixed T
-% STEP 1: ESTIMATE V & GAMMA (DIAGONAL)
-V = zeros(K*G0*H);
-Gam_tmp = zeros(K,K,H*G0);
-V_j = zeros(K*H);
-ytil = nan(size(yp));
-for g = 1:G0
-    yp_tmp = yp(:,:,Gr_EST==g,:);
-    xp_tmp = xp(:,:,Gr_EST==g);
-    cp_tmp = cp(:,:,Gr_EST==g);
-    czozc_tmp = czozc(:,:,Gr_EST==g,:);
-    czozy_tmp = czozy(:,:,Gr_EST==g,:);
-    czozx_tmp = czozx(:,:,Gr_EST==g,:);
-    xzm_tmp = xzm(:,:,Gr_EST==g,:);
-    xzmzx_tmp = sum(xzmzx(:,:,Gr_EST==g,:),3);
-    phi = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,GIRF(:,:,g,:)));
-
-    xb = pagemtimes(xp_tmp, GIRF(:,:,g,:));
-    cphi = pagemtimes(cp_tmp,phi);
-    ytil(:,:,Gr_EST==g,:) = yp_tmp - cphi;
-    e_tmp = ytil(:,:,Gr_EST==g,:) - xb;
-    
-    % Gamma
-    Gam_tmp(:,:,H*(g-1)+1:H*g) = reshape(xzmzx_tmp,K,K,H);
-    % V
-    ze_tmp = zpt(:,:,Gr_EST==g).*e_tmp;
-    for l = 1:H
-        zeez_tmp = pagemtimes(ze_tmp(:,:,:,l),'transpose',ze_tmp(:,:,:,l:end),'none');
-        Psi_tmp = sum(pagemtimes(pagemtimes(xzm_tmp(:,:,:,l),zeez_tmp),'none',xzm_tmp(:,:,:,l:end),'transpose'),3);
-        V_j(K*(l-1)+1:K*l,K*(l-1)+1:end)=reshape(Psi_tmp,K,K*(H-l+1));
-    end
-    
-    % V
-    V(K*H*(g-1)+1:K*H*g,K*H*(g-1)+1:K*H*g) = V_j+V_j'-diag(diag(V_j));
-end
-Gam = kron(eye(G0*H),ones(K,K));
-Gam(Gam > 0) = Gam_tmp;
-
-% STEP 2: Correction. See Proposition S1!!
-xzozx = pagemtimes(zx,'transpose',pagemtimes(OMEGA,zx),'none');
-zytil = pagemtimes(zp,ytil); % L by 1 by N by H
-xzozytil = pagemtimes(zx,'transpose',pagemtimes(OMEGA,zytil),'none');
-for j = 1:G0
-    % xzrmr(zy-zx*b_jl) K by 1 by N by H
-    part_jl = xzmzy - pagemtimes(xzmzx,GIRF(:,:,j,:));
-    for k = 1:G0
-        if j==k
-            f_ijg = zeros(1,G0,N);
-            v_jg_m = zeros(K,G0,N,H);
-            for g = setdiff([1:G0],j)
-                IR_dif= GIRF(:,:,g,:)-GIRF(:,:,j,:);
-                dist = reshape(sum(pagemtimes(IR_dif,'transpose',2*xzmzy - pagemtimes(xzmzx,GIRF(:,:,j,:)+GIRF(:,:,g,:)),'none'),4),N,1);
-                bw   = std(dist)*1.06*N^(-0.2);
-                f_ijg(1,g,:)  = normpdf(dist/bw)/bw .* (Gr_EST == j | Gr_EST ==g);
-
-                % velocity: denominator 1 by 1 by N by H sum over h
-                denom = sum(pagemtimes(pagemtimes(IR_dif,'transpose',xzozx,'none'),IR_dif),4);
-                % velocity: scale 1 by 1 by N
-                Xbi = reshape(permute(pagemtimes(xp,IR_dif),[1,4,3,2]),T*H,[]);
-                scale = reshape(vecnorm(Xbi)',1,1,N);
-                % velocity: numerator
-                nom = xzozytil - pagemtimes(xzozx,GIRF(:,:,j,:)); % K by 1 by N by H
-                v_jg_m(:,g,:,:) = nom.*scale./denom;
-            end
-            % K by K by N by H
-            tmp = nan(K*H,K*H);
-            for h = 1:H
-                cor = -pagemtimes(part_jl(:,:,:,h),'none',sum(f_ijg.*v_jg_m,2),'transpose');
-                tmp(K*(h-1)+1:K*h,:) = reshape(mean(cor,3),K,K*H);
-            end
-        else
-            IR_dif= GIRF(:,:,k,:)-GIRF(:,:,j,:);
-            dist = reshape(sum(pagemtimes(IR_dif,'transpose',2*xzmzy - pagemtimes(xzmzx,GIRF(:,:,j,:)+GIRF(:,:,k,:)),'none'),4),N,1);
-            bw   = std(dist)*1.06*N^(-0.2);
-            f_ijk = nan(1,1,N);
-            f_ijk(1,1,:)  = normpdf(dist/bw)/bw .* (Gr_EST == j | Gr_EST ==g);
-
-            % velocity: denominator 1 by 1 by N by H sum over h
-            denom = sum(pagemtimes(pagemtimes(IR_dif,'transpose',xzozx,'none'),IR_dif),4);
-            % velocity: scale 1 by 1 by N
-            Xbi = reshape(permute(pagemtimes(xp,IR_dif),[1,4,3,2]),T*H,[]);
-            scale = reshape(vecnorm(Xbi)',1,1,N);
-            % velocity: numerator
-            nom = xzozytil - pagemtimes(xzozx,GIRF(:,:,j,:)); % K by 1 by N by H
-            v_jk_m = nom.*scale./denom;
-
-            % K by K by N by H
-            tmp = nan(K*H,K*H);
-            for h = 1:H
-                cor = -pagemtimes(part_jl(:,:,:,h),'none',f_ijk.*v_jk_m,'transpose');
-                tmp(K*(h-1)+1:K*h,:) = reshape(mean(cor,3),K,K*H);
-            end
-        end
-        % now we have KH by KH block of cor (tmp)
-        Gam(K*H*(j-1)+1:K*H*j,K*H*(k-1)+1:K*H*k) = ...
-            Gam(K*H*(j-1)+1:K*H*j,K*H*(k-1)+1:K*H*k) + tmp;
-    end
-end
-
-GSE = permute(reshape(diag(sqrt(Gam\V/Gam)),K,H,G0),[1,4,3,2]);
 
 end
 

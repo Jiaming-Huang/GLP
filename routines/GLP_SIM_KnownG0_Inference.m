@@ -23,6 +23,8 @@ function [Gr_EST, GIRF, GSE, GSE_FT] = GLP_SIM_KnownG0_Inference(reg, G0, bxInit
 %   bxInit: initial value for beta_x (here we use the true IRs)
 %   bcInit: initial value for beta_c (here we use the coef estimates from IND_LP)
 %   weight: either string ('2SLS', 'IV') or user-supplied weights;
+%           default: inverse of the covariance matrix of moment conditions (averaged over h)
+%                   see Sec S1.3 for details
 %   FE: 1 - fixed effects (within estimator, demean)
 
 % --------------------------- OUTPUT --------------------------------
@@ -30,9 +32,9 @@ function [Gr_EST, GIRF, GSE, GSE_FT] = GLP_SIM_KnownG0_Inference(reg, G0, bxInit
 %   GIRF: Group IRF, K by H by G0 matrix
 %   GSE: Group IRF, K by H by G0 matrix
 
-% when weight, FE, large T are not supplied
+% when weight, FE, are not supplied
 % by default we use:
-% 1) inverse of asym.variance as weighting matrix
+% 1) inverse of the covariance matrix of moment conditions (averaged over h)
 % 2) FE
 % 3) large T inference
 
@@ -66,24 +68,17 @@ z      = [zx zc];
 % data dimensions
 N       = reg.param.N;
 T       = reg.param.T;
+
+if FE == 1
+    c = [c ones(N*T,1)];
+    z = [z ones(N*T,1)];
+end
+
+% variable dimension
 H       = size(LHS,2);
 K       = size(x,2);
 P       = size(c,2);
 L       = size(z,2);
-
-% estimation params
-tol     = 1e-6;
-nIter   = 1000;  % by default, number of iteration should be less than 100
-
-if FE == 1
-    % demean variables for FE estimation
-    tmp    = [LHS x c z];
-    tmp_de = gdemean(tmp,N,T);
-    LHS    = tmp_de(:,1:H);
-    x      = tmp_de(:,H+1:H+K);
-    c      = tmp_de(:,H+K+1:H+K+P);
-    z      = tmp_de(:,H+K+P+1:end);
-end
 
 % Reshape variables, for later usage
 zp = reshape(z',L,T,N); % L by T by N
@@ -118,13 +113,19 @@ czozy = pagemtimes(czo,zy);
 czozx = pagemtimes(czo,zx);
 M = OMEGA - pagemtimes(czo,'transpose',pagemldivide(czozc,czo),'none');
 xzm = pagemtimes(xz,M);
-xzmzx =  pagemtimes(xzm,zx);
-xzmzy =  pagemtimes(xzm,zy);
+xzmzx = pagemtimes(xzm,zx);
+xzmzy = pagemtimes(xzm,zy);
 
+%% ITERATION PARAMS
+tol     = 1e-6;
+nIter   = 1000;  % by default, number of iteration should be less than 100
 
-
-%% ESTIMATION OF GROUP ASSIGNMENT
+%% ESTIMATION
 if G0 == 1   % Trivial case, single group
+
+    xzmzx_tmp = sum(xzmzx,3);
+    xzmzy_tmp = sum(xzmzy,3);
+    GIRF = pagemldivide(xzmzx_tmp,xzmzy_tmp);
     Gr_EST = ones(N,1);
 else % main algorithm starts here
     ir_old  = bxInit;
@@ -196,24 +197,13 @@ else % main algorithm starts here
     %% in simulation with known group number and true IRs
     %% we do not try different initializations
     Gr_EST = Gr;
+    GIRF = ir_new;
 
 end
 
 
-%% Inference: mixed with IV weighting matrix
-OMEGA = repmat(eye(L,L),1,1,N,H);
-czo = pagemtimes(cz,OMEGA);
-czozc = pagemtimes(czo,zc);  % P by P by N by H
-czozy = pagemtimes(czo,zy);
-czozx = pagemtimes(czo,zx);
-M = OMEGA - pagemtimes(czo,'transpose',pagemldivide(czozc,czo),'none');
-xzm = pagemtimes(xz,M);
-xzmzx =  pagemtimes(xzm,zx);
-xzmzy =  pagemtimes(xzm,zy);
-
-%% Large T
+%% Inference: Large T
 GSE  = nan(K,1,G0,H);
-GIRF = nan(K,1,G0,H);
 for g = 1:G0
     yp_tmp = yp(:,:,Gr_EST==g,:);
     xp_tmp = xp(:,:,Gr_EST==g);
@@ -223,9 +213,6 @@ for g = 1:G0
     czozx_tmp = czozx(:,:,Gr_EST==g,:);
     xzm_tmp   = xzm(:,:,Gr_EST==g,:);
     xzmzx_tmp = sum(xzmzx(:,:,Gr_EST==g,:),3);
-    xzmzy_tmp = sum(xzmzy(:,:,Gr_EST==g,:),3);
-
-    GIRF(:,:,g,:) = pagemldivide(xzmzx_tmp,xzmzy_tmp);
     phi = pagemldivide(czozc_tmp,czozy_tmp - pagemtimes(czozx_tmp,GIRF(:,:,g,:)));
 
     xb = pagemtimes(xp_tmp, GIRF(:,:,g,:));
@@ -244,8 +231,7 @@ for g = 1:G0
     GSE(:,:,g,:) = sqrt(V);
 end
 
-
-%% Inference: Fixed T - change weighting to IV
+%% Inference: Fixed T
 % STEP 1: ESTIMATE V & GAMMA (DIAGONAL)
 V = zeros(K*G0*H);
 Gam_tmp = zeros(K,K,H*G0);
