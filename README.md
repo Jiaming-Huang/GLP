@@ -10,9 +10,9 @@ For the simulation study, the results can be replicated using `SIM_KnownG0.m` (S
 
 For the empirical application, `EMP_Main.m` gives the baseline results (individual LP-IV, panel LP-IV and the GLP). This is compared with ad hoc grouping criterion (`EMP_Adhoc.m`) and FAVAR (`EMP_FAVAR.m`). They both take `EMP_data.mat` as input.
 
-The FAVAR application involves two additional folders: 
+The FAVAR application involves two additional folders:
 
-1. fred: used to estimate the factor model, which is borrowed from the FRED-MD package by McCracken and Ng (2016). I modify the `factors_em.m` file to include the Onatski (2010) criterion. 
+1. fred: used to estimate the factor model, which is borrowed from the FRED-MD package by McCracken and Ng (2016). I modify the `factors_em.m` file to include the Onatski (2010) criterion.
 
 2. svar: used to estimate the SVAR-IV model after factor estimation. Here I use the proxy-SVAR upackage provided by Mertens and Montiel-Olea (2018). Alternative inference methods are included (wild bootstrap, delta method and Jentsch Lunsford MBB)
 
@@ -26,7 +26,6 @@ Auxiliary functions in the routine folder are:
   - `GLP_SIM_KnownG0.m`: GLP with known number of groups G0 (Section 6.2)
   - `GLP_SIM_UnknownG0.m`: GLP that runs for Ghat=1,...Gmax, and select the number of groups by IC; see equation (28)-(29) (I remove the inference as is not reported in simulations)
   - `GLP_SIM_KnownG0_Inference.m`: same as `GLP_SIM_KnownG0.m` except that we return results for both large T and small T inference
-  - `GLP_SIM_KnownG0_Weight.m`: the same as `GLP_SIM_KnownG0.m` except that we return results for unit-and-horizon specific weighting and mixed weighting (see SM S1.3)
   
 - `eval_GroupLPIV.m`: evaluate the performance of the GLP
   
@@ -77,9 +76,9 @@ indOut = ind_LP(reg);  % individual LP-IV
 Gmax   = 8;             % maximal number of groups
 nInit  = 100;           % number of initializations
 bInit  = indOut.b;      % this is the output from individual LP-IV, from which we can draw initial guesses
-weight = indOut.asymV;  % this is the weight matrix (I show here the case with L=K)
-inference = 1;          % large T inference, with mixed weighting scheme (See SM S1.3) 
-[Gr_EST, GIRF, GSE, OBJ, IC] = GLP(tmp, Gmax, nInit, bInit, weight, FE, inference);
+weight = repmat(mean(indOut.v_hac,3),1,1,par.N,1);  % this is the weight matrix
+inference = 1;          % large T inference
+[Gr_EST, GIRF, GSE, OBJ, IC] = GLP(reg, Gmax, nInit, bInit, weight, FE, inference);
 
 ```
 
@@ -139,6 +138,7 @@ end
 The `GLP.m` is a ready-to-use function for implementing the GLP. It is written for balanced panel with exact identification (L=K).
 
 It takes the following input:
+
 - `reg`: data (reg.LHS, reg.x, reg.c, reg.zx, reg.zc, reg.param)
   - `reg.LHS` NT by H dependent variables
   - `reg.x`, NT by K policy variables whose coefs are to be grouped
@@ -149,21 +149,22 @@ It takes the following input:
 - `Gmax`: maximal number of groups to be classified
 - `nInit`: number of initializations
 - `bInit`: potential initial values, it is recommended to use IR estimates from individual LP-IV (`ind_LP.m`) as initial guess, but you can specify your own guess
-- `weight`: either string ('2SLS', 'IV') or user-supplied weights; it is recommended to use the inverse of the asymptotic variance from the individual LP-IV for group estimation, and then use identical weights to re-estimate IRs (see Supplementary Material S1.3 for more details)
-- `FE`: 1 - fixed effects (within estimator, demean)
-- `inference`: 1 - large T (re-estimate using identical weights); 2 - fixed T (re-estimate using identical weights); 3 - large T (raw weights)
+- `weight`: either string ('2SLS', 'IV') or user-supplied weights; it is recommended to use the inverse of the covariance matrix of moment conditions (averaged over h), i.e. the horizon-specific weights to account for noises in each horizons
+- `FE`: 1 - fixed effects (include a constant term in controls)
+- `inference`: 1 - large T; 2 - fixed T;
 
 It gives the following output:
+
 - `Gr_EST`: Group composition, N by Gmax matrix
 - `GIRF`: Group IRF, 1 by Gmax cell, with K by 1 by G by H coefs
 - `GSE`: Group standard errors, 1 by Gmax cell, with K by 1 by G by H SE
 - `OBJ`: minimized objective function for each Ghat, 1 by Gmax vector
-- `IC`: Group IRF, K by H by Gmax matrix
-
+- `IC`: IC: information criterion, 1 by Gmax vector
 
 **Note:** Notice that you can freely specify the set of variables of interest `reg.x` whose IRs are grouped and the set of nuisance variables `reg.c` whose IRs are unit-specific. Moreover, both x and c can be potentially endogenous, as long as we provide the corresponding instruments `reg.zx` and `reg.zc`.
 
 ## References
+
 Huang, J. (2021). Group Local Projections.
 
 McCracken, M. W., & Ng, S. (2016). FRED-MD: A monthly database for macroeconomic research. Journal of Business & Economic Statistics, 34(4), 574-589.
