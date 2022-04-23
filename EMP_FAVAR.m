@@ -14,10 +14,10 @@ load('./data/EMP_data.mat');
 
 % get housing inflation FFR, instrument and controls
 % the indices are the same as in EMP_Main.m
-y_idx = 17;
-x_idx = 8;
-c_idx = [16,19,22,24];
-z_idx = 13;
+y_idx = 19;
+x_idx = 10;
+c_idx = [18 21 24 26];
+z_idx = 15;
 
 % all the y_it are treated as information variables in FAVAR
 HPINFL = reshape(data(:,y_idx),par.Tfull,par.N);
@@ -46,6 +46,7 @@ nfac = size(Fhat,2);
 % R2 for each individual series
 figure;plot(R2)
 
+fprintf('Total R2 for Housing Inflation is %f \n\n',R2_T);
 fprintf('Mean R2 for Housing Inflation is %f \n\n',mean(R2(1:size(MSA,2))));
 fprintf('Top 10 series explained by the factor is \n');
 fprintf('%s \n',t10_s{:});
@@ -70,7 +71,7 @@ modelSpec.NWlags            = 8;
 % inference
 modelSpec.cLevel            = 95;     % confidence interval level
 modelSpec.nBoot             = 1000;        % # of bootstrap
-modelSpec.bootMethod        = 1;           % 1 - wild bootstrap;
+modelSpec.bootMethod        = 3;           % 1 - wild bootstrap;
 % 2 - Delta Method
 % 3 - Jentsch Lunsford MBB
 
@@ -144,98 +145,97 @@ irf_x_l = lamhat*irf_fac_l';
 H         = SVAR.irhor-1;
 LineColors = [.0  .2  .4];
 BandColors = [.7  .7  .7];
-if jj==4
-    % Baseline: Onatski criterion
-    n         = SVAR.n;
-    SVAR.select_variables{1,3} = 'INDPRO';
-    SVAR.select_variables{1,4} = 'REALLN';
-    SVAR.select_variables{1,5} = 'INFL (PCE)';
 
-    figure;
-    % macro var
-    for i = 1:n-nfac
-        subplot(3,3,i);
-        hold on;
-        % bands
-        ub = SVAR.irsH(2:end,i)'; % drop h=0
-        lb = SVAR.irsL(2:end,i)';
-        fill([1:H, fliplr(1:H)],...
-            [ub fliplr(lb)],...
-            BandColors,'EdgeColor','none');
-        % ir
-        plot(1:H, SVAR.irs(2:end,i)','LineWidth',1.2,'color',LineColors);
-
-        % zero line
-        yline(0,'k','LineWidth',.7);
-
-        xlim([1 H]); axis tight
-        set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
-            'FontSize',8,'Layer','top')
-
-        title(SVAR.select_variables(i));
-        hold off;
-    end
+n         = SVAR.n;
+SVAR.select_variables{1,3} = 'INDPRO';
+SVAR.select_variables{1,4} = 'REALLN';
+SVAR.select_variables{1,5} = 'INFL (PCE)';
 
 
-    % la % victoria
-    id = 211;
-    ir = cumsum(irf_x(id,2:end));
-    ub = cumsum(irf_x_h(id,2:end));
-    lb = cumsum(irf_x_l(id,2:end));
-    subplot(3,3,6);
+% plot all variables
+figure;
+% macro var
+for i = 1:n-nfac
+    subplot(3,3,i);
     hold on;
+    % bands
+    ub = SVAR.irsH(2:end,i)'; % drop h=0
+    lb = SVAR.irsL(2:end,i)';
     fill([1:H, fliplr(1:H)],...
         [ub fliplr(lb)],...
         BandColors,'EdgeColor','none');
-    plot(1:H,ir,'LineWidth',1.2,'color',LineColors);
-    yline(0,'k','LineWidth',.7);
-    xlim([1 H]); axis tight
-    set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
-        'FontSize',8,'Layer','top')
-    title('Los Angeles, CA');
-    hold off;
+    % ir
+    plot(1:H, SVAR.irs(2:end,i)','LineWidth',1.2,'color',LineColors);
 
+    % zero line
+    yline(0,'k','LineWidth',.7);
 
-    id = 357;
-    ir = cumsum(irf_x(id,2:end));
-    ub = cumsum(irf_x_h(id,2:end));
-    lb = cumsum(irf_x_l(id,2:end));
-    subplot(3,3,7);
-    hold on;
-    fill([1:H, fliplr(1:H)],...
-        [ub fliplr(lb)],...
-        BandColors,'EdgeColor','none');
-    plot(1:H,ir,'LineWidth',1.2,'color',LineColors);
-    yline(0,'k','LineWidth',.7);
     xlim([1 H]); axis tight
     set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
         'FontSize',8,'Layer','top')
-    title('Victoria, TX');
-    hold off;
 
-    % hpi
-    irs = cumsum(irf_x(1:size(MSA,2),:),2)';
-    subplot(3,3,8);
-    hold on;
-    plot(1:H,irs(2:end,:),'LineWidth',1.2,'color',LineColors);
-    yline(0,'k','LineWidth',.7);
-    xlim([1 H]); axis tight
-    set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
-        'FontSize',8,'Layer','top')
-    title('HPI');
+    title(SVAR.select_variables(i));
     hold off;
-    saveas(gcf,strcat('./output/EMP/EMP_FAVAR_nFac',num2str(nfac),'.png'));
-    
-elseif jj==5
-    % user-specified number of factors
-    irs = cumsum(irf_x(1:size(MSA,2),:),2)';
-    figure;
-    hold on;
-    plot(1:H,irs(2:end,:),'LineWidth',1.2,'color',LineColors);
-    yline(0,'k','LineWidth',.7);
-    xlim([1 H]); axis tight
-    set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
-        'FontSize',8,'Layer','top')
-    hold off;
-    saveas(gcf,strcat('./output/EMP/EMP_FAVAR_nFac',num2str(nfac),'.png'));
 end
+
+
+% la % victoria
+id = 250;
+ir = cumsum(irf_x(id,2:end));
+ub = cumsum(irf_x_h(id,2:end));
+lb = cumsum(irf_x_l(id,2:end));
+subplot(3,3,6);
+hold on;
+fill([1:H, fliplr(1:H)],...
+    [ub fliplr(lb)],...
+    BandColors,'EdgeColor','none');
+plot(1:H,ir,'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+title('New York-Newark-Jersey');
+hold off;
+
+
+id = 357;
+ir = cumsum(irf_x(id,2:end));
+ub = cumsum(irf_x_h(id,2:end));
+lb = cumsum(irf_x_l(id,2:end));
+subplot(3,3,7);
+hold on;
+fill([1:H, fliplr(1:H)],...
+    [ub fliplr(lb)],...
+    BandColors,'EdgeColor','none');
+plot(1:H,ir,'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+title('Victoria, TX');
+hold off;
+
+% hpi
+irs = cumsum(irf_x(1:size(MSA,2),:),2)';
+subplot(3,3,8);
+hold on;
+plot(1:H,irs(2:end,:),'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+title('HPI');
+hold off;
+saveas(gcf,strcat('./output/EMP/EMP_FAVAR_All_nFac',num2str(nfac),'.png'));
+
+% plot housing inflations
+figure;
+hold on;
+plot(1:H,irs(2:end,:),'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+title('HPI');
+hold off;
+saveas(gcf,strcat('./output/EMP/EMP_FAVAR_HPInfl_nFac',num2str(nfac),'.png'));
