@@ -48,7 +48,7 @@ dataholder = cell(NGridSize,8);
 %% True IRF
 IR_true = zeros(K,1,G0,H+1);
 for g = 1 : G0
-    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ [0:H]);
+    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ (0:H));
 end
 
 %% Simulation
@@ -84,7 +84,7 @@ for jj = 1:NGridSize
         Gr0 = Gr0 - ( id <=Ncut(k) )' *1;
     end
     DGPsetup.G   = Gr0;
-    Ng0          = sum(Gr0==[1:G0]);
+    Ng0          = sum(Gr0==1:G0);
 
     % create IRF_TRUE for computing RMSE
     IR_TRUE = nan(K,1,N,H+1);

@@ -44,7 +44,7 @@ for parchoice = 1:2
         %% True IRF
         IR_true = zeros(K,1,G0,H+1);
         for g = 1 : G0
-            IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ [0:H]);
+            IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ (0:H));
         end
 
         %% initialization, creating temporary statistics holder
@@ -84,7 +84,7 @@ for parchoice = 1:2
                 Gr0 = Gr0 - ( id <=Ncut(k) )' *1;
             end
             DGPsetup.G   = Gr0;
-            Ng0          = sum(Gr0==[1:G0]);
+            Ng0          = sum(Gr0==1:G0);
 
             %% create IRF_TRUE for computing RMSE
             IR_TRUE = nan(K,1,N,H+1);
@@ -108,8 +108,8 @@ for parchoice = 1:2
                 IND_MSE(iRep,jj) = mean(err2(:));
 
                 %% GLP Estimation - AsymV
-                weight = indOut.asymV;
-                [Gr, GIRF, GSE]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE, inference);
+                weight = repmat(mean(indOut.v_hac,3),1,1,N,1);%indOut.v_hac;
+                [Gr, GIRF, GSE]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE, inference);
                 [GLP_AC(iRep,jj), GLP_MSE(iRep,jj), GLP_BR(iRep,jj), ~, ~, Gr_re, GIRF_re, GSE_re] = eval_GroupLPIV([Gr0 Gr], IR_TRUE, GIRF, GSE,indOut.se(1:K,:,:,:));
                 GLP_GR{iRep,jj}   = Gr_re;
                 GLP_IR{iRep,jj}   = GIRF_re;

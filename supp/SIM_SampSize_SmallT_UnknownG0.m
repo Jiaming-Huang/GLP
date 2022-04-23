@@ -47,7 +47,7 @@ for parchoice = 1:2
         %% True IRF
         IR_true = zeros(K,1,G0,H+1);
         for g = 1 : G0
-            IR_true(:,:,g,:) = [par(2,g)* (par(1,g) .^ [0:H])];
+            IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ (0:H));
         end
 
         % initialization, creating temporary output holder
@@ -73,7 +73,7 @@ for parchoice = 1:2
                 Gr0 = Gr0 - ( id <=Ncut(k) )' *1;
             end
             DGPsetup.G   = Gr0;
-            Ng0          = sum(Gr0==[1:G0]);
+            Ng0          = sum(Gr0==1:G0);
             
             %% create IRF_TRUE for computing RMSE
             IR_TRUE = nan(K,1,N,H+1);
@@ -97,7 +97,7 @@ for parchoice = 1:2
                 IND_MSE = mean(err2(:));
 
                 %% GLP Estimation
-                weight = indOut.asymV;
+                weight = repmat(mean(indOut.v_hac,3),1,1,N,1);%indOut.v_hac;
                 [Gr_EST, GIRF, OBJ, IC]   = GLP_SIM_UnknownG0(Sim.reg, Gmax, nInit, indOut.b, weight, FE);
 
                 GLP_GR{iRep,jj}     = Gr_EST;
@@ -107,7 +107,7 @@ for parchoice = 1:2
                 GIR_EST = nan(size(IR_TRUE));
                 for Ghat = 1:Gmax
                     % map GIRF to K by H by N matrix
-                    Ng = sum(Gr_EST(:,Ghat)==[1:Ghat]);
+                    Ng = sum(Gr_EST(:,Ghat)==1:Ghat);
                     for g = 1:Ghat
                         girf = GIRF{1,Ghat};
                         GIR_EST(:,:,Gr_EST(:,Ghat)==g,:) = repmat(girf(:,:,g,:),1,1,Ng(g),1);

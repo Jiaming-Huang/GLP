@@ -45,7 +45,7 @@ dataholder = cell(NGridSize,8);
 %% True IRF
 IR_true = zeros(K,1,G0,H+1);
 for g = 1 : G0
-    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ [0:H]);
+    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ (0:H));
 end
 
 %% Simulation
@@ -96,7 +96,7 @@ for jj = 1:NGridSize
         Gr0 = Gr0 - ( id <=Ncut(k) )' *1;
     end
     DGPsetup.G   = Gr0;
-    Ng0          = sum(Gr0==[1:G0]);
+    Ng0          = sum(Gr0==1:G0);
 
     % create IRF_TRUE for computing RMSE
     IR_TRUE = nan(K,1,N,H+1);
@@ -123,8 +123,8 @@ for jj = 1:NGridSize
             IND_MSE(iRep,tt) = mean(err2(:));
 
             %% GLP Estimation - AsymV
-            weight = indOut.asymV;
-            [Gr, GIRF, GSE]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE, inference);
+            weight = repmat(mean(indOut.v_hac,3),1,1,N,1);%indOut.v_hac;
+            [Gr, GIRF, GSE]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE, inference);
             [GLP_AC(iRep,tt), GLP_MSE(iRep,tt), GLP_BR(iRep,tt), ~, ~, Gr_re, GIRF_re, GSE_re] = eval_GroupLPIV([Gr0 Gr], IR_TRUE, GIRF, GSE, indOut.se(1:K,:,:,:));
             GLP_GR{iRep,tt}   = Gr_re;
             GLP_IR{iRep,tt}   = GIRF_re;
@@ -148,7 +148,7 @@ for jj = 1:NGridSize
             for h = 1:H+1
                 tmp_h     = Sim.reg;
                 tmp_h.LHS = tmp_h.LHS(:,h);
-                [Gr(:,h), GIRF(:,:,:,h), GSE(:,:,:,h)]   = GLP_SIM_KnownG0(tmp_h, G0, IR_true(:,:,:,h), indOut.b(2,:,:,h), indOut.asymV(:,:,:,h), FE, inference);
+                [Gr(:,h), GIRF(:,:,:,h), GSE(:,:,:,h)]   = GLP_SIM_KnownG0(tmp_h, G0, IR_true(:,:,:,h), indOut.b(2:end,:,:,h), weight(:,:,:,h), FE, inference);
                 [AC(h), MSE(h), BR(h), ~, ~, Gr_re(:,h), GIRF_re(:,:,:,h), GSE_re(:,:,:,h)] = eval_GroupLPIV([Gr0 Gr(:,h)], IR_TRUE(:,:,:,h), GIRF(:,:,:,h), GSE(:,:,:,h), indOut.se(1:K,:,:,h));
             end
             Ubands        = GIRF_re + 1.96*GSE_re;
@@ -221,7 +221,7 @@ endAll = toc(startAll);
 fprintf('Total execution time:: %f seconds.\n', endAll)
 
 %% SAVE OUTPUT
-save_name = strcat('output/SIM_HBH_KnownG',num2str(G0),'_param',num2str(parchoice),...
+save_name = strcat('output\SUPP\SIM_HBH_KnownG',num2str(G0),'_param',num2str(parchoice),...
     '_FE.mat');
 save(save_name);
 

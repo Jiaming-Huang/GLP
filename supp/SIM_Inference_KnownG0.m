@@ -45,7 +45,7 @@ dataholder = cell(NGridSize,8);
 %% True IRF
 IR_true = zeros(K,1,G0,H+1);
 for g = 1 : G0
-    IR_true(:,:,g,:) = [par(2,g)* (par(1,g) .^ [0:H])];
+    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ (0:H));
 end
 
 %% Simulation
@@ -82,7 +82,7 @@ for jj = 1:NGridSize
         Gr0 = Gr0 - ( id <=Ncut(k) )' *1;
     end
     DGPsetup.G   = Gr0;
-    Ng0          = sum(Gr0==[1:G0]);
+    Ng0          = sum(Gr0==1:G0);
 
     % create IRF_TRUE for computing RMSE
     IR_TRUE = nan(K,1,N,H+1);
@@ -95,15 +95,15 @@ for jj = 1:NGridSize
         fprintf('Start working on grid [N=%d, T=%d] \n', N, T)
         %% Simulation starts here
         startGrid = tic;
-        parfor iRep = 1:nRep
+        for iRep = 1:nRep
             Sim = DGP(N,T,DGPsetup);
 
             %% Benchmark: Individual LP-IV
             indOut = ind_LP(Sim.reg);
 
             %% GLP Estimation - AsymV
-            weight = indOut.asymV;
-            [Gr, GIRF, GSE, GSE_FT]   = GLP_SIM_KnownG0_Inference(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE);
+            weight = repmat(mean(indOut.v_hac,3),1,1,N,1);%indOut.v_hac;
+            [Gr, GIRF, GSE, GSE_FT]   = GLP_SIM_KnownG0_Inference(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE);
             [GLP_AC(iRep,tt), GLP_MSE(iRep,tt), GLP_BR(iRep,tt), Permutation, Ng, Gr_re, GIRF_re, GSE_re] = eval_GroupLPIV([Gr0 Gr], IR_TRUE, GIRF, GSE, indOut.se(1:K,:,:,:));
             GLP_GR{iRep,tt}   = Gr_re;
             GLP_IR{iRep,tt}   = GIRF_re;
@@ -118,12 +118,12 @@ for jj = 1:NGridSize
             seRatio = GSE_EST./indOut.se(1:K,:,:,:);
             GLP_BR_FT(iRep,tt) = mean(seRatio(:));
             
-            Ubands            = GIRF_re + 1.96*GSE_re;
-            Lbands            = GIRF_re - 1.96*GSE_re;
-            Ubands_FT            = GIRF_re + 1.96*GSE_re_FT;
-            Lbands_FT            = GIRF_re - 1.96*GSE_re_FT;
-            GLP_CP{iRep,tt}   = (Ubands > IR_true) & (Lbands < IR_true);
-            GLP_CP_FT{iRep,tt}   = (Ubands_FT > IR_true) & (Lbands_FT < IR_true);
+            Ubands              = GIRF_re + 1.96*GSE_re;
+            Lbands              = GIRF_re - 1.96*GSE_re;
+            Ubands_FT           = GIRF_re + 1.96*GSE_re_FT;
+            Lbands_FT           = GIRF_re - 1.96*GSE_re_FT;
+            GLP_CP{iRep,tt}     = (Ubands > IR_true) & (Lbands < IR_true);
+            GLP_CP_FT{iRep,tt}  = (Ubands_FT > IR_true) & (Lbands_FT < IR_true);
 
             fprintf('Iteration: %d \n', iRep)
         end
@@ -137,7 +137,7 @@ for jj = 1:NGridSize
     % Accuracy
     dataholder{jj,2}  = GLP_AC; % nRep x TGridSize x 1 matrix
     % IRs
-    dataholder{jj,3}  = [GLP_IR]; % nRep x TGridSize x 3 cell
+    dataholder{jj,3}  = GLP_IR; % nRep x TGridSize x 3 cell
     % Stanrd errors
     dataholder{jj,4}  = [GLP_SE, GLP_SE_FT]; % nRep x TGridSize x 3 cell
     % MSE
@@ -153,7 +153,7 @@ endAll = toc(startAll);
 fprintf('Total execution time:: %f seconds.\n', endAll)
 
 %% SAVE OUTPUT
-save_name = strcat('..\output\SUPP\SIM_Inference_KnownG',num2str(G0),'_param',num2str(parchoice),...
+save_name = strcat('output\SUPP\SIM_Inference_KnownG',num2str(G0),'_param',num2str(parchoice),...
     '_FE.mat');
 save(save_name);
 

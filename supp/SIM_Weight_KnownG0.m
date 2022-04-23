@@ -26,7 +26,7 @@ par        = params(G0,parchoice);
 % EST
 K          = 1;
 FE         = 1;
-inference  = 3;
+inference  = 1;
 H          = 6;               % h=0 is added in data preparation by default
 
 % SIM
@@ -46,7 +46,7 @@ dataholder = cell(NGridSize,13);
 %% True IRF
 IR_true = zeros(K,1,G0,H+1);
 for g = 1 : G0
-    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ [0:H]);
+    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ (0:H));
 end
 
 %% Simulation
@@ -81,14 +81,6 @@ for jj = 1:NGridSize
     GLP_MSEi      = nan(nRep, TGridSize); % GLP mean squared errors
     GLP_BRi       = nan(nRep,TGridSize); % GLP confidence band ratio (relative to IND_LP)
     GLP_CPi       = cell(nRep,TGridSize); % GLP coverage probability
-
-    % GLP - unit & horizon specific weighting matrix for GLP
-    %       IV for post GLP
-    GLP_IRm       = cell(nRep,TGridSize); % GLP IR
-    GLP_SEm       = cell(nRep,TGridSize); % GLP standard errors
-    GLP_MSEm      = nan(nRep, TGridSize); % GLP mean squared errors
-    GLP_BRm       = nan(nRep,TGridSize); % GLP confidence band ratio (relative to IND_LP)
-    GLP_CPm       = cell(nRep,TGridSize); % GLP coverage probability
 
     % GLP - IV weighting
     GLP_GR_IV    = cell(nRep,TGridSize); % GLP Gr_hat
@@ -132,7 +124,7 @@ for jj = 1:NGridSize
         Gr0 = Gr0 - ( id <=Ncut(k) )' *1;
     end
     DGPsetup.G   = Gr0;
-    Ng0          = sum(Gr0==[1:G0]);
+    Ng0          = sum(Gr0==1:G0);
 
     % create IRF_TRUE for computing RMSE
     IR_TRUE = nan(K,1,N,H+1);
@@ -159,8 +151,8 @@ for jj = 1:NGridSize
             IND_MSE(iRep,tt) = mean(err2(:));
 
             %% GLP Estimation - unit&horizon specific weighting
-            weight = indOut.asymV;
-            [Grih, GIRFih, GIRFm, GSEih, GSEm] = GLP_SIM_KnownG0_Weight(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE);
+            weight = indOut.v_hac;
+            [Grih, GIRFih, GSEih] = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE, inference);
             [GLP_ACih(iRep,tt), GLP_MSEih(iRep,tt), GLP_BRih(iRep,tt), ~, ~, Gr_reih, GIRF_reih, GSE_reih] = eval_GroupLPIV([Gr0 Grih], IR_TRUE, GIRFih, GSEih, indOut.se(1:K,:,:,:));
             GLP_GRih{iRep,tt}   = Gr_reih;
             GLP_IRih{iRep,tt}   = GIRF_reih;
@@ -169,16 +161,9 @@ for jj = 1:NGridSize
             Lbandsih            = GIRF_reih - 1.96*GSE_reih;
             GLP_CPih{iRep,tt}   = (Ubandsih > IR_true) & (Lbandsih < IR_true);
 
-            [~, GLP_MSEm(iRep,tt), GLP_BRm(iRep,tt), ~, ~, ~, GIRF_rem, GSE_rem] = eval_GroupLPIV([Gr0 Grih], IR_TRUE, GIRFm, GSEm, indOut.se(1:K,:,:,:));
-            GLP_IRm{iRep,tt}   = GIRF_rem;
-            GLP_SEm{iRep,tt}   = GSE_rem;
-            Ubandsm            = GIRF_rem + 1.96*GSE_rem;
-            Lbandsm            = GIRF_rem - 1.96*GSE_rem;
-            GLP_CPm{iRep,tt}   = (Ubandsm > IR_true) & (Lbandsm < IR_true);
-
             %% GLP Estimation - horizon specific weighting
-            weight = repmat(permute(panOut.asymV,[1,2,4,3]),1,1,N,1);%repmat(mean(indOut.asymV,3),1,1,N,1);
-            [Grh, GIRFh, GSEh]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE, inference);
+            weight = repmat(mean(indOut.v_hac,3),1,1,N,1);
+            [Grh, GIRFh, GSEh]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE, inference);
             [GLP_ACh(iRep,tt), GLP_MSEh(iRep,tt), GLP_BRh(iRep,tt), ~, ~, Gr_reh, GIRF_reh, GSE_reh] = eval_GroupLPIV([Gr0 Grh], IR_TRUE, GIRFh, GSEh, indOut.se(1:K,:,:,:));
             GLP_GRh{iRep,tt}   = Gr_reh;
             GLP_IRh{iRep,tt}   = GIRF_reh;
@@ -188,8 +173,8 @@ for jj = 1:NGridSize
             GLP_CPh{iRep,tt}   = (Ubandsh > IR_true) & (Lbandsh < IR_true);
 
             %% GLP Estimation - unit specific weighting
-            weight = repmat(mean(indOut.asymV,4),1,1,1,H+1);
-            [Gri, GIRFi, GSEi]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE, inference);
+            weight = repmat(mean(indOut.v_hac,4),1,1,1,H+1);
+            [Gri, GIRFi, GSEi]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE, inference);
             [GLP_ACi(iRep,tt), GLP_MSEi(iRep,tt), GLP_BRi(iRep,tt), ~, ~, Gr_rei, GIRF_rei, GSE_rei] = eval_GroupLPIV([Gr0 Gri], IR_TRUE, GIRFi, GSEi, indOut.se(1:K,:,:,:));
             GLP_GRi{iRep,tt}   = Gr_rei;
             GLP_IRi{iRep,tt}   = GIRF_rei;
@@ -198,10 +183,9 @@ for jj = 1:NGridSize
             Lbandsi            = GIRF_rei - 1.96*GSE_rei;
             GLP_CPi{iRep,tt}   = (Ubandsi > IR_true) & (Lbandsi < IR_true);
 
-
             %% GLP Estimation - 2SLS
             weight = '2SLS';
-            [Gr_2SLS, GIRF_2SLS, GSE_2SLS]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE, inference);
+            [Gr_2SLS, GIRF_2SLS, GSE_2SLS]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE, inference);
             [GLP_AC_2SLS(iRep,tt), GLP_MSE_2SLS(iRep,tt), GLP_BR_2SLS(iRep,tt), ~, ~, Gr_2SLS_re, GIRF_2SLS_re, GSE_2SLS_re] = eval_GroupLPIV([Gr0 Gr_2SLS], IR_TRUE, GIRF_2SLS, GSE_2SLS, indOut.se(1:K,:,:,:));
             GLP_GR_2SLS{iRep,tt}     = Gr_2SLS_re;
             GLP_IR_2SLS{iRep,tt}     = GIRF_2SLS_re;
@@ -212,7 +196,7 @@ for jj = 1:NGridSize
 
             %% GLP Estimation - IV
             weight = 'IV';
-            [Gr_IV, GIRF_IV, GSE_IV]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2,:,:,:), weight, FE, inference);
+            [Gr_IV, GIRF_IV, GSE_IV]   = GLP_SIM_KnownG0(Sim.reg, G0, IR_true, indOut.b(2:end,:,:,:), weight, FE, inference);
             [GLP_AC_IV(iRep,tt), GLP_MSE_IV(iRep,tt), GLP_BR_IV(iRep,tt), ~, ~, Gr_IV_re, GIRF_IV_re, GSE_IV_re] = eval_GroupLPIV([Gr0 Gr_IV], IR_TRUE, GIRF_IV, GSE_IV, indOut.se(1:K,:,:,:));
             GLP_GR_IV{iRep,tt}   = Gr_IV_re;
             GLP_IR_IV{iRep,tt}   = GIRF_IV_re;
@@ -250,21 +234,20 @@ for jj = 1:NGridSize
     % Accuracy
     dataholder{jj,2}  = [GLP_ACih, GLP_ACh, GLP_ACi, GLP_AC_2SLS, GLP_AC_IV]; % nRep x TGridSize x 3 matrix
     % IRs
-    dataholder{jj,3}  = [GLP_IRih, GLP_IRh, GLP_IRi, GLP_IRm, GLP_IR_2SLS, GLP_IR_IV]; % nRep x TGridSize x 3 cell
+    dataholder{jj,3}  = [GLP_IRih, GLP_IRh, GLP_IRi, GLP_IR_2SLS, GLP_IR_IV]; % nRep x TGridSize x 3 cell
     % Stanrd errors
-    dataholder{jj,4}  = [GLP_SEih, GLP_SEh, GLP_SEi, GLP_SEm, GLP_SE_2SLS, GLP_SE_IV]; % nRep x TGridSize x 3 cell
+    dataholder{jj,4}  = [GLP_SEih, GLP_SEh, GLP_SEi, GLP_SE_2SLS, GLP_SE_IV]; % nRep x TGridSize x 3 cell
     % MSE
-    dataholder{jj,5}  = [GLP_MSEih, GLP_MSEh, GLP_MSEi, GLP_MSEm, GLP_MSE_2SLS, GLP_MSE_IV, PAN_MSE, IND_MSE, IGLP_MSE]; % nRep x TGridSize x 6 matrix
+    dataholder{jj,5}  = [GLP_MSEih, GLP_MSEh, GLP_MSEi, GLP_MSE_2SLS, GLP_MSE_IV, PAN_MSE, IND_MSE, IGLP_MSE]; % nRep x TGridSize x 6 matrix
     % Band ratios
-    dataholder{jj,6}  = [GLP_BRih, GLP_BRh, GLP_BRi, GLP_BRm, GLP_BR_2SLS, GLP_BR_IV, IGLP_BR]; % nRep x TGridSize x 4 matrix
+    dataholder{jj,6}  = [GLP_BRih, GLP_BRh, GLP_BRi, GLP_BR_2SLS, GLP_BR_IV, IGLP_BR]; % nRep x TGridSize x 4 matrix
     % Coverage probabilities
     dataholder{jj,7}  = GLP_CPih; % nRep x TGridSize x G0 by H matrix
     dataholder{jj,8}  = GLP_CPh; % nRep x TGridSize x G0 by H matrix
     dataholder{jj,9}  = GLP_CPi; % nRep x TGridSize x G0 by H matrix
-    dataholder{jj,10}  = GLP_CPm;
-    dataholder{jj,11}  = GLP_CP_2SLS;
-    dataholder{jj,12} = GLP_CP_IV;
-    dataholder{jj,13} = IGLP_CP;
+    dataholder{jj,10} = GLP_CP_2SLS;
+    dataholder{jj,11} = GLP_CP_IV;
+    dataholder{jj,12} = IGLP_CP;
 
 end
 endAll = toc(startAll);
@@ -277,44 +260,22 @@ save(save_name);
 
 
 %% TABLES
-%% Accuracy for AsymV (col 1), IV (col 2), 2SLS (col 3)
-Accuracy = round([reshape(mean(dataholder{1,2}),TGridSize,5);
+%% Accuracy for ih, h, i, 2sls, iv
+Accuracy = [reshape(mean(dataholder{1,2}),TGridSize,5);
     reshape(mean(dataholder{2,2}),TGridSize,5);
-    reshape(mean(dataholder{3,2}),TGridSize,5)],4);
+    reshape(mean(dataholder{3,2}),TGridSize,5)];
 disp(Accuracy)
-%% RMSE for AsymV (col 1), IV (col 2) and 2SLS (col 3), PAN (col 4), IND
-% (col 5), IGLP (col 6)
-RMSE = round(sqrt([reshape(mean(dataholder{1,5}),TGridSize,9);
-    reshape(mean(dataholder{2,5}),TGridSize,9);
-    reshape(mean(dataholder{3,5}),TGridSize,9)]),5);
-disp(RMSE)
-%% BR for - AsymV, IV, 2SLS IGLP
-BR = round([reshape(mean(dataholder{1,6}),TGridSize,7);
-    reshape(mean(dataholder{2,6}),TGridSize,7);
-    reshape(mean(dataholder{3,6}),TGridSize,7)],4);
-disp(BR)
+%% RMSE for ih, h, i, 2sls, iv, pan, ind iglp
+RMSE = round(sqrt([reshape(mean(dataholder{1,5}),TGridSize,8);
+    reshape(mean(dataholder{2,5}),TGridSize,8);
+    reshape(mean(dataholder{3,5}),TGridSize,8)]),5);
+disp(RMSE*100)
+%% BR for - ih, h, i, 2sls, iv, iglp
+BR = round([reshape(mean(dataholder{1,6}),TGridSize,6);
+    reshape(mean(dataholder{2,6}),TGridSize,6);
+    reshape(mean(dataholder{3,6}),TGridSize,6)],4);
+disp(BR*100)
 %% Coverage Rates
-% %% Coverage GLP - AsymV
-% CP_GLP = array2table(round([reshape(mean(mean(cell2mat(dataholder{1,7})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{2,7})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{3,7})),3),TGridSize,H+1)],4),'VariableNames',{'h=0','h=1','h=2','h=3','h=4','h=5','h=6'});
-% disp(CP_GLP)
-% %% Coverage GLP - IV
-% CP_IV = array2table(round([reshape(mean(mean(cell2mat(dataholder{1,8})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{2,8})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{3,8})),3),TGridSize,H+1)],4),'VariableNames',{'h=0','h=1','h=2','h=3','h=4','h=5','h=6'});
-% disp(CP_IV)
-% %% Coverage GLP - 2SLS
-% CP_2SLS = array2table(round([reshape(mean(mean(cell2mat(dataholder{1,9})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{2,9})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{3,9})),3),TGridSize,H+1)],4),'VariableNames',{'h=0','h=1','h=2','h=3','h=4','h=5','h=6'});
-% disp(CP_2SLS)
-% %% Coverage GLP - IGLP
-% CP_IGLP = array2table(round([reshape(mean(mean(cell2mat(dataholder{1,10})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{2,10})),3),TGridSize,H+1);
-%     reshape(mean(mean(cell2mat(dataholder{3,10})),3),TGridSize,H+1)],4),'VariableNames',{'h=0','h=1','h=2','h=3','h=4','h=5','h=6'});
-% disp(CP_IGLP)
-
 CP_GLPih = round([reshape(mean(mean(cell2mat(dataholder{1,7})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{2,7})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{3,7})),3),TGridSize,H+1)],4);
@@ -324,20 +285,17 @@ CP_GLPh = round([reshape(mean(mean(cell2mat(dataholder{1,8})),3),TGridSize,H+1);
 CP_GLPi = round([reshape(mean(mean(cell2mat(dataholder{1,9})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{2,9})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{3,9})),3),TGridSize,H+1)],4);
-CP_GLPm = round([reshape(mean(mean(cell2mat(dataholder{1,10})),3),TGridSize,H+1);
+CP_2SLS = round([reshape(mean(mean(cell2mat(dataholder{1,10})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{2,10})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{3,10})),3),TGridSize,H+1)],4);
-CP_2SLS = round([reshape(mean(mean(cell2mat(dataholder{1,11})),3),TGridSize,H+1);
+CP_IV = round([reshape(mean(mean(cell2mat(dataholder{1,11})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{2,11})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{3,11})),3),TGridSize,H+1)],4);
-CP_IV = round([reshape(mean(mean(cell2mat(dataholder{1,12})),3),TGridSize,H+1);
+CP_IGLP = round([reshape(mean(mean(cell2mat(dataholder{1,12})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{2,12})),3),TGridSize,H+1);
     reshape(mean(mean(cell2mat(dataholder{3,12})),3),TGridSize,H+1)],4);
-CP_IGLP = round([reshape(mean(mean(cell2mat(dataholder{1,13})),3),TGridSize,H+1);
-    reshape(mean(mean(cell2mat(dataholder{2,13})),3),TGridSize,H+1);
-    reshape(mean(mean(cell2mat(dataholder{3,13})),3),TGridSize,H+1)],4);
 CP_Stacked = [];
 for i = 1:size(CP_GLPih,1)
-    CP_Stacked = [CP_Stacked;CP_GLPih(i,:);CP_GLPh(i,:);CP_GLPi(i,:);CP_GLPm(i,:);CP_2SLS(i,:);CP_IV(i,:);CP_IGLP(i,:)];
+    CP_Stacked = [CP_Stacked;CP_GLPih(i,:);CP_GLPh(i,:);CP_GLPi(i,:);CP_2SLS(i,:);CP_IV(i,:);CP_IGLP(i,:)];
 end
 CP_Stacked
