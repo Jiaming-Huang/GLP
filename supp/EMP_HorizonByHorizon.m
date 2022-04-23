@@ -8,8 +8,8 @@
 % zt        - info robust high-frequency MP shocks Miranda-Agrippino & Ricco
 
 %% Housekeeping
-close all;
-clear; clc;
+% close all;
+% clear; clc;
 % addpath('./routines');
 
 %% Load Data
@@ -25,16 +25,15 @@ clear; clc;
 % clear dum
 % save('./data/EMP_data.mat');
 
-load('./data/EMP_data.mat');
-
+load('EMP_data.mat');
 %% Model Specification
 % 1. feed the index of your x, y and z
 % 2. specify the number of lags
 FE = 1;
-par.y_idx = 17;         % housing inflation, log difference *100
-par.x_idx = 8;          % FFR - 8; GS1 - 9
-par.c_idx = [16 19 22 24];    %  FRM30, GIP, GREALLN, INFL_PCE
-par.z_idx = [13];       % FF4 - 12; info robust IV1 - 13; MPSign - 14; RR - 15;
+par.y_idx = 19;              % housing inflation, log difference *100
+par.x_idx = 10;              % FFR - 10; GS1 - 11
+par.c_idx = [18 21 24 26];    % FRM30 GIP, GREALLN, INFL_PCE
+par.z_idx = 15;              % FF4 - 14; info robust IV1 - 15; MPSign - 16; RR - 17;
 par.nylag = 4;
 par.nxlag = 4;
 par.nclag = 4;
@@ -48,6 +47,11 @@ reg = preEmpData(data, par);
 tmp = reg;
 tmp.LHS = cumsum(tmp.LHS,2);  % recover level
 
+fprintf(strcat('Dependent Variable:\t',varname{1,par.y_idx},'\n'));
+fprintf(strcat('Policy Variable:\t',varname{1,par.x_idx},'\n'));
+fprintf(strcat('Shock Variable:\t',varname{1,par.z_idx},'\n'));
+fprintf(strcat('Control Variable:\t',strjoin(varname(1,par.c_idx)),'\n'));
+
 %% Now you have three options: individual LP, panel LP or GLP
 H          = par.horizon;
 LineColors = [.0  .2  .4];
@@ -56,8 +60,9 @@ BandColors = [.7  .7  .7];
 %% Horizon-by-horizon Group LP
 % initial guess
 indOut = ind_LP(tmp);
+weight = repmat(mean(indOut.v_hac,3),1,1,par.N,1);
 Gmax   = 10;
-nInit  = 100;
+nInit  = 50;
 inference = 1;
 Gr_EST = cell(1,H);
 GIRF   = cell(1,H);
@@ -69,11 +74,10 @@ for h = 1:H
     tmp_h     = tmp;
     tmp_h.LHS = tmp_h.LHS(:,h);
     bInit     = indOut.b(:,:,:,h);
-    weight    = indOut.asymV(:,:,:,h);
-    [Gr_EST{1,h}, GIRF{1,h}, GSE{1,h}, OBJ(:,h), IC(:,h)] = GLP(tmp_h, Gmax, nInit, bInit, weight, FE, inference);
+    [Gr_EST{1,h}, GIRF{1,h}, GSE{1,h}, OBJ(:,h), IC(:,h)] = GLP(tmp_h, Gmax, nInit, bInit, weight(:,:,:,h), FE, inference);
 end
 
-save(strcat('./output/EMP/EMP_HBH.mat'));
+save(strcat('.\output\EMP\EMP_HBH.mat'));
 
 % information criterion
 figure;
@@ -81,7 +85,7 @@ plot(IC,'b-s','LineWidth',1,'MarkerSize',5,...
     'MarkerEdgeColor','blue',...
     'MarkerFaceColor','blue');
 xlabel('Number of Groups');
-saveas(gcf,strcat('./output/EMP/IC_HBH.png'));
+saveas(gcf,strcat('.\output\EMP\EMP_HBH_IC.png'));
 
 % choose Ghat = 3 as an example
 Ghat = 3;
@@ -112,7 +116,7 @@ for h = 1:H
     GSE_relabel(:,h)  = gse(ord,h);
 end
 
-writematrix(Gr_relabel,strcat('./output/EMP/EMP_HBH_Gr_re.csv'));
+writematrix(Gr_relabel,strcat('output\EMP\EMP_HBH_Gr_re.csv'));
 
 
 % Plot Group IRs
@@ -121,14 +125,13 @@ Lb = GIRF_relabel-1.96*GSE_relabel;
 figure;
 for g = 1:Ghat
     subplot(ceil(Ghat/2),2,g);
-    k = ord(g);
     hold on;
     % bands
     fill([1:H, fliplr(1:H)],...
-        [Ub(k,:) fliplr(Lb(k,:))],...
+        [Ub(g,:) fliplr(Lb(g,:))],...
         BandColors,'EdgeColor','none');
     % IR
-    plot(1:H, GIRF_relabel(k,:),'LineWidth',1.2,'color',LineColors);
+    plot(1:H, GIRF_relabel(g,:),'LineWidth',1.2,'color',LineColors);
 
     yline(0,'k','LineWidth',.7);
     xlabel(strcat({'Group'},{' '},num2str(g)));
@@ -137,7 +140,7 @@ for g = 1:Ghat
         'FontSize',8,'Layer','top')
     hold off
 end
-saveas(gcf,strcat('./output/EMP/EMP_HBH_GIRF_G',num2str(Ghat),'.png'));
+saveas(gcf,strcat('.\output\EMP\EMP_HBH_GIRF_G',num2str(Ghat),'.png'));
 
 
 % Plot funny individual IRs
@@ -162,4 +165,41 @@ xlim([1 H]); axis tight
 set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
     'FontSize',8,'Layer','top')
 hold off;
-saveas(gcf,strcat('./output/EMP/EMP_HBH_Charleston_WV.png'));
+saveas(gcf,strcat('.\output\EMP\EMP_HBH_Charleston_WV.png'));
+
+% compare id = 63 with IND and GLP
+load('./output/EMP/EMP_FE_Ylag_.mat')
+
+% IND LP-IV
+id = 63;
+figure;
+hold on;
+fill([1:H, fliplr(1:H)],...
+    [Ub_IND(id,:) fliplr(Lb_IND(id,:))],...
+    BandColors,'EdgeColor','none');
+plot(1:H, IR_IND(id,:),'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+hold off;
+saveas(gcf,strcat('.\output\EMP\EMP_IND_Charleston_WV.png'));
+
+% GLP
+gr_est = Gr_EST(id,Ghat);
+girf   = squeeze(GIRF{1,Ghat});
+gse    = squeeze(GSE{1,Ghat});
+ub = girf+1.96*gse;
+lb = girf-1.96*gse;
+figure;
+hold on;
+fill([1:H, fliplr(1:H)],...
+    [ub(gr_est,:) fliplr(lb(gr_est,:))],...
+    BandColors,'EdgeColor','none');
+plot(1:H, girf(gr_est,:),'LineWidth',1.2,'color',LineColors);
+yline(0,'k','LineWidth',.7);
+xlim([1 H]); axis tight
+set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
+    'FontSize',8,'Layer','top')
+hold off;
+saveas(gcf,strcat('.\output\EMP\EMP_GLP_Charleston_WV.png'));
