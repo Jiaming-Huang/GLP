@@ -83,10 +83,23 @@ rng(27);
 % SIM_NoTrueGroup;
 
 %% Sec 7.1 & 7.2 Empirical Application: GLP
+% prepare data
+% dum         = importdata('./data/empirical_main.csv');
+% data        = dum.data;
+% date        = dum.textdata(2:end,1);
+% MSA         = dum.textdata(2:end,2);
+% varname     = strsplit(dum.textdata{1,1},','); varname = varname(1,3:end);
+% par.N       = length(unique(MSA));
+% par.Tfull   = size(data,1)/par.N;
+% par.date    = date(1:par.Tfull,1);
+% MSA         = reshape(MSA,par.Tfull,par.N);
+% clear dum
+% save('./data/EMP_data.mat');
 % baseline: FE & lags of dependent variables
 % nylag = 4;
 % close all;clc;clearvars -except nylag;
 % EMP_Main;
+% % adhoc grouping
 % close all;clc;clearvars -except nylag;
 % EMP_Adhoc;
 
@@ -126,8 +139,14 @@ rng(27);
 % This section runs SIM_UnknownG0.m for different sample sizes
 % Short panels: T=500, N=[100, 200]
 % Long panels: T=[100,200,500] N=500
+% clear;
+% close all;
+% clc;
 % SIM_SampSize_SmallT_UnknownG0;
-SIM_SampSize_LargeT_UnknownG0;
+% clear;
+% close all;
+% clc;
+% SIM_SampSize_LargeT_UnknownG0;
 
 %% Sec S1.3 Different Weighting Matrix
 % This section runs SIM_UnknownG0.m for different weighting matrices (2SLS, IV)
@@ -182,15 +201,13 @@ SIM_SampSize_LargeT_UnknownG0;
 % end
 
 %% Sec S2.4 Empirical Application: Dynamic panel bias
-% To fully avoid the dynamic panel bias, I re-estimate the model without
-% lagged dependent variable
-% nylag = 0;
-% close all;clc;clearvars -except nylag;
-% EMP_Main;
-
-%% Sec S2.5 Empirical Application: Horizon-by-Horizon Grouping
 % nylag = 0;
 % close all;clc;clearvars -except nylag;
 % EMP_Main;
 % close all;clc;clearvars -except nylag;
 % EMP_Adhoc;
+
+%% Sec S2.5 Empirical Application: Horizon-by-Horizon Grouping
+% close all;
+% clear; clc;
+% EMP_HorizonByHorizon;
