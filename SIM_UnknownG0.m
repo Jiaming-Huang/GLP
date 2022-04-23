@@ -48,7 +48,7 @@ dataholder = cell(NGridSize,5);
 %% True IRF
 IR_true = zeros(K,1,G0,H+1);
 for g = 1 : G0
-    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ [0:H]);
+    IR_true(:,:,g,:) = par(2,g)* (par(1,g) .^ (0:H));
 end
 
 %% Simulation
@@ -102,7 +102,7 @@ for jj = 1:NGridSize
             IND_MSE = mean(err2(:));
             
             %% GLP Estimation
-            weight = indOut.asymV;
+            weight = repmat(mean(indOut.v_hac,3),1,1,N,1);
             [Gr_EST, GIRF, OBJ, IC]   = GLP_SIM_UnknownG0(Sim.reg, Gmax, nInit, indOut.b, weight, FE);
             
             GLP_GR{iRep,tt}     = Gr_EST;
@@ -112,7 +112,7 @@ for jj = 1:NGridSize
             GIR_EST = nan(size(IR_TRUE));
             for Ghat = 1:Gmax
                 % map GIRF to K by H by N matrix
-                Ng = sum(Gr_EST(:,Ghat)==[1:Ghat]);
+                Ng = sum(Gr_EST(:,Ghat)==1:Ghat);
                 for g = 1:Ghat
                     girf = GIRF{1,Ghat};
                     GIR_EST(:,:,Gr_EST(:,Ghat)==g,:) = repmat(girf(:,:,g,:),1,1,Ng(g),1);
@@ -152,7 +152,7 @@ fprintf('Total execution time:: %f seconds.\n', endAll)
 
 %% SAVE OUTPUT
 save_name = strcat('output\SIM_UnknownG',num2str(G0),'_param',num2str(parchoice),...
-    '_FE1.mat');
+    '_FE.mat');
 save(save_name);
 
 
