@@ -13,28 +13,16 @@
 % addpath('./routines');
 
 %% Load Data
-% dum         = importdata('./data/empirical_main.csv');
-% data        = dum.data;
-% date        = dum.textdata(2:end,1);
-% MSA         = dum.textdata(2:end,2);
-% varname     = strsplit(dum.textdata{1,1},','); varname = varname(1,3:end);
-% par.N       = length(unique(MSA));
-% par.Tfull   = size(data,1)/par.N;
-% par.date    = date(1:par.Tfull,1);
-% MSA         = reshape(MSA,par.Tfull,par.N);
-% clear dum
-% save('./data/EMP_data.mat');
-
 load('./data/EMP_data.mat');
 rng(27);
 %% Model Specification
 % 1. feed the index of your x, y and z
 % 2. specify the number of lags
 FE = 1;
-par.y_idx = 17;         % housing inflation, log difference *100
-par.x_idx = 8;          % FFR - 8; GS1 - 9
-par.c_idx = [16 19 22 24];    %  FRM30, GIP, GREALLN, INFL_PCE
-par.z_idx = [13];       % FF4 - 12; info robust IV1 - 13; MPSign - 14; RR - 15;
+par.y_idx = 19;              % housing inflation, log difference *100
+par.x_idx = 10;              % FFR - 10; GS1 - 11
+par.c_idx = [18 21 24 26];    %  GIP, GREALLN, INFL_PCE
+par.z_idx = 15;              % FF4 - 14; info robust IV1 - 15; MPSign - 16; RR - 17;
 par.nylag = nylag;
 par.nxlag = 4;
 par.nclag = 4;
@@ -54,6 +42,11 @@ if par.nylag == 0
 else
     spec = strcat(spec,'_Ylag_');
 end
+
+fprintf(strcat('Dependent Variable:\t',varname{1,par.y_idx},'\n'));
+fprintf(strcat('Policy Variable:\t',varname{1,par.x_idx},'\n'));
+fprintf(strcat('Shock Variable:\t',varname{1,par.z_idx},'\n'));
+fprintf(strcat('Control Variable:\t',strjoin(varname(1,par.c_idx)),'\n'));
 
 %% Now you have three options: individual LP, panel LP or GLP
 H          = par.horizon;
@@ -102,7 +95,7 @@ hold off;
 saveas(gcf,strcat('./output/EMP/EMP_',spec,'IND.png'));
 
 % Selected IR plots
-for id = [211,357]
+for id = [250,357]
     figure;
     hold on;
     fill([1:H, fliplr(1:H)],...
@@ -119,9 +112,9 @@ end
 
 %% 3) Group LP
 Gmax   = 8;
-nInit  = 100;
+nInit  = 50;
 bInit  = indOut.b;
-weight = indOut.asymV;
+weight = repmat(mean(indOut.v_hac,3),1,1,par.N,1);
 inference = 1;
 [Gr_EST, GIRF, GSE, OBJ, IC] = GLP(tmp, Gmax, nInit, bInit, weight, FE, inference);
 

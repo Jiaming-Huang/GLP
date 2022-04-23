@@ -18,10 +18,10 @@ rng(27);
 % 1. feed the index of your x, y and z
 % 2. specify the number of lags
 FE = 1;
-par.y_idx = 17;         % housing inflation, log difference *100
-par.x_idx = 8;          % FFR - 8; GS1 - 9
-par.c_idx = [16 19 22 24];    %  FRM30, GIP, GREALLN, INFL_PCE
-par.z_idx = [13];       % FF4 - 12; info robust IV1 - 13; MPSign - 14; RR - 15;
+par.y_idx = 19;              % housing inflation, log difference *100
+par.x_idx = 10;              % FFR - 10; GS1 - 11
+par.c_idx = [18 21 24 26];    %  GIP, GREALLN, INFL_PCE
+par.z_idx = 15;              % FF4 - 14; info robust IV1 - 15; MPSign - 16; RR - 17;
 par.nylag = nylag;
 par.nxlag = 4;
 par.nclag = 4;
@@ -37,11 +37,15 @@ tmp.LHS = cumsum(tmp.LHS,2);  % recover level
 
 spec = 'FE';
 if par.nylag == 0
-    spec = strcat(spec,'_NoYlag_');
+    spec = strcat(spec,'_NoYlag');
 else
-    spec = strcat(spec,'_Ylag_');
+    spec = strcat(spec,'_Ylag');
 end
 
+fprintf(strcat('Dependent Variable:\t',varname{1,par.y_idx},'\n'));
+fprintf(strcat('Policy Variable:\t',varname{1,par.x_idx},'\n'));
+fprintf(strcat('Shock Variable:\t',varname{1,par.z_idx},'\n'));
+fprintf(strcat('Control Variable:\t',strjoin(varname(1,par.c_idx)),'\n'));
 %% Now you have three options: individual LP, panel LP or GLP
 H          = par.horizon;
 LineColors = [.0  .2  .4];
@@ -50,9 +54,9 @@ BandColors = [.7  .7  .7];
 
 %% Exisitng Criteria: Ad-hoc panel LP
 % get the rich and poor index from data/MSA_Feature_FE_Y.csv
-MSA_Feature = importdata('./data/MSA_features_Adhoc.csv');
+MSA_Feature = importdata(strcat('./data/MSA_features_Adhoc_',spec,'.csv'));
 % rich MSAs
-idx = MSA_Feature.data(:,end-2);
+idx = MSA_Feature.data(:,end-1);
 idx = kron(idx,ones(tmp.param.T,1));
 idx = logical(idx);
 adhoc.y = tmp.y(idx,:);
@@ -61,7 +65,7 @@ adhoc.zx = tmp.zx(idx,:);
 adhoc.LHS = tmp.LHS(idx,:);
 adhoc.c = tmp.c(idx,:);
 adhoc.param.T = tmp.param.T;
-adhoc.param.N = sum(MSA_Feature.data(:,end-2)==1);
+adhoc.param.N = sum(MSA_Feature.data(:,end-1)==1);
 
 richOut = panel_LP(adhoc, FE);
 Ub_Rich = reshape(richOut.IRUb,1,par.horizon);
@@ -80,18 +84,13 @@ xlim([1 H]); axis tight
 set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
     'FontSize',8,'Layer','top')
 hold off;
-saveas(gcf,strcat('./output/EMP/EMP_',spec,'RICHp10.png'));
+saveas(gcf,strcat('./output/EMP/EMP_',spec,'_RICHp10.png'));
 
 
 
 % poor MSAs
-if nylag ~= 0
-    idx = MSA_Feature.data(:,end-1);
-    adhoc.param.N = sum(MSA_Feature.data(:,end-1));
-else
-    idx = MSA_Feature.data(:,end);
-    adhoc.param.N = sum(MSA_Feature.data(:,end));
-end
+idx = MSA_Feature.data(:,end);
+adhoc.param.N = sum(MSA_Feature.data(:,end));
 idx = kron(idx,ones(tmp.param.T,1));
 idx = logical(idx);
 adhoc.y = tmp.y(idx,:);
@@ -119,4 +118,4 @@ xlim([1 H]); axis tight
 set(gca,'XTick',[1 6 12 18 24],'XTickLabel',cellstr(num2str([1 6 12 18 24]')),...
     'FontSize',8,'Layer','top')
 hold off;
-saveas(gcf,strcat('./output/EMP/EMP_',spec,'POORG1p10.png'));
+saveas(gcf,strcat('./output/EMP/EMP_',spec,'_POORG1p10.png'));
