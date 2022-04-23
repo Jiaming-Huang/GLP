@@ -1,7 +1,6 @@
 function [Gr_EST, GIRF, GSE, GSE_FT] = GLP_SIM_KnownG0_Inference(reg, G0, bxInit, bcInit, weight, FE)
 % GLP algorithm used for Supplemental Material S1.4
 % It is the same as GLP_SIM_KnownG0.m, except that we compute both Large T and Fixed T standard errors to speed up
-% By default we use mixed weighting scheme, line 211-226 (See Section S1.3)
 
 % Related functions:
 % GLP_SIM_KnownG0.m: general GLP with known G0
@@ -25,22 +24,21 @@ function [Gr_EST, GIRF, GSE, GSE_FT] = GLP_SIM_KnownG0_Inference(reg, G0, bxInit
 %   weight: either string ('2SLS', 'IV') or user-supplied weights;
 %           default: inverse of the covariance matrix of moment conditions (averaged over h)
 %                   see Sec S1.3 for details
-%   FE: 1 - fixed effects (within estimator, demean)
+%   FE: 1 - fixed effects (include a constant term in controls)
 
 % --------------------------- OUTPUT --------------------------------
 %   Gr_EST: Group composition, N by 1 vector
-%   GIRF: Group IRF, K by H by G0 matrix
-%   GSE: Group IRF, K by H by G0 matrix
+%   GIRF: Group IRF, K by 1 by G0 by H matrix
+%   GSE: Group IRF, K by 1 by G0 by H matrix
 
 % when weight, FE, are not supplied
 % by default we use:
 % 1) inverse of the covariance matrix of moment conditions (averaged over h)
 % 2) FE
-% 3) large T inference
 
 if nargin < 5
     indOut = ind_LP(reg);
-    weight = indOut.asymV;
+    weight = repmat(mean(indOut.v_hac,3),1,1,reg.param.N,1);
 end
 
 if nargin < 6

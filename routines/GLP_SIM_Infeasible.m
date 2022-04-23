@@ -20,10 +20,10 @@ function [GIRF, GSE, Ubands, Lbands] = GLP_SIM_Infeasible(reg, Gr, FE)
 %   FE: 1 - fixed effects (within estimator, demean)
 
 % OUTPUT:
-%   GIRF: Group IRF, K by H by G0 matrix
-%   GSE: Group IRF, K by H by G0 matrix
-%   Ubands: Upper bound, K by H by G0 matrix
-%   Lbands: Lower bound, K by H by G0 matrix
+%   GIRF: Group IRF, K by 1 by G0 by H matrix
+%   GSE: Group IRF, K by 1 by G0 by H matrix
+%   Ubands: Upper bound, K by 1 by G0 by H matrix
+%   Lbands: Lower bound, K by 1 by G0 by H matrix
 
 T = reg.param.T;
 H = size(reg.LHS,2);

@@ -14,26 +14,29 @@ function [Gr_EST, GIRF, GSE, OBJ, IC] = GLP(reg, Gmax, nInit, bInit, weight, FE,
 %   nInit: number of initializations
 %   bInit: potential initial values, see below
 %   weight: either string ('2SLS', 'IV') or user-supplied weights;
-%   FE: 1 - fixed effects (within estimator, demean)
-%   inference: 1 - large T (IV); 2 - fixed T (IV); 3 - large T (Raw)
+%           default: inverse of the covariance matrix of moment conditions (averaged over h)
+%                   see Sec S1.3 for details
+%   FE: 1 - fixed effects (include a constant term in controls)
+%   inference: 1 - large T
+%              2 - fixed T
 
 % --------------------------- OUTPUT --------------------------------
 %   Gr_EST: Group composition, N by Gmax matrix
 %   GIRF: Group IRF, 1 by Gmax cell, with K by 1 by G by H coefs
 %   GSE: Group standard errors, 1 by Gmax cell, with K by 1 by G by H SE
 %   OBJ: minimized objective function for each Ghat, 1 by Gmax vector
-%   IC: Group IRF, K by H by Gmax matrix
+%   IC: information criterion, 1 by Gmax vector
 
 
 % when weight, FE, large T are not supplied
 % by default we use:
 % 1) inverse of asym.variance as weighting matrix
 % 2) FE
-% 3) large T (Iterative)
+% 3) large T
 
 if nargin < 5
     indOut = ind_LP(reg);
-    weight = indOut.asymV;
+    weight = repmat(mean(indOut.v_hac,3),1,1,reg.param.N,1);
 end
 
 if nargin < 6
@@ -41,7 +44,7 @@ if nargin < 6
 end
 
 if nargin < 7
-    inference = 1; % modified large T with IV weighting
+    inference = 1;
 end
 
 %% PREPARE VARIABLES

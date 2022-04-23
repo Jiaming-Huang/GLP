@@ -1,6 +1,7 @@
 function [GIRF, GSE, Ubands, Lbands] = GLP_SIM_Infeasible1(reg, Gr, FE)
 % Infeasible GLP (IGLP) algorithm used for simulation where we know the true group partition
 % Specifically, we run panel LP-IV with GMM criterion given in equation (4)
+% for comparision with GLP_SIM_Infeasible.m, we use 2SLS weights
 
 % Related functions:
 % GLP_SIM_KnownG0.m: this function takes G0 as given and initializes with true IRs and just run one iteration
@@ -17,13 +18,15 @@ function [GIRF, GSE, Ubands, Lbands] = GLP_SIM_Infeasible1(reg, Gr, FE)
 %           reg.param.N, reg.param.T
 %           for simplicity, the program is written for balanced panel, but can be easily adapted to unbalanced ones
 %   Gr: (true) group partition
-%   FE: 1 - fixed effects (within estimator, demean)
+%   FE: 1 - fixed effects (include a constant term in controls)
+%   inference: 1 - large T
+%              2 - fixed T
 
 % OUTPUT:
-%   GIRF: Group IRF, K by H by G0 matrix
-%   GSE: Group IRF, K by H by G0 matrix
-%   Ubands: Upper bound, K by H by G0 matrix
-%   Lbands: Lower bound, K by H by G0 matrix
+%   GIRF: Group IRF, K by 1 by G0 by H matrix
+%   GSE: Group IRF, K by 1 by G0 by H matrix
+%   Ubands: Upper bound, K by 1 by G0 by H matrix
+%   Lbands: Lower bound, K by 1 by G0 by H matrix
 
 T = reg.param.T;
 H = size(reg.LHS,2);

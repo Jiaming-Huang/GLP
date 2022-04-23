@@ -27,15 +27,15 @@ function [Gr_EST, GIRF, GSE] = GLP_SIM_KnownG0(reg, G0, bxInit, bcInit, weight, 
 %   weight: either string ('2SLS', 'IV') or user-supplied weights;
 %           default: inverse of the covariance matrix of moment conditions (averaged over h)
 %                   see Sec S1.3 for details
-%   FE: 1 - fixed effects (within estimator, demean)
+%   FE: 1 - fixed effects (include a constant term in controls)
 %   inference: 1 - large T
 %              2 - fixed T
 
 
 % --------------------------- OUTPUT --------------------------------
 %   Gr_EST: Group composition, N by 1 vector
-%   GIRF: Group IRF, K by H by G0 matrix
-%   GSE: Group IRF, K by H by G0 matrix
+%   GIRF: Group IRF, K by 1 by G0 by H matrix
+%   GSE: Group IRF, K by 1 by G0 by H matrix
 
 % when weight, FE, inference are not supplied
 % by default we use:
@@ -45,7 +45,7 @@ function [Gr_EST, GIRF, GSE] = GLP_SIM_KnownG0(reg, G0, bxInit, bcInit, weight, 
 
 if nargin < 5
     indOut = ind_LP(reg);
-    weight = indOut.asymV;
+    weight = repmat(mean(indOut.v_hac,3),1,1,reg.param.N,1);
 end
 
 if nargin < 6

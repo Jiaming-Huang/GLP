@@ -20,23 +20,23 @@ function [Gr_EST, GIRF, OBJ, IC] = GLP_SIM_UnknownG0(reg, Gmax, nInit, bInit, we
 %   nInit: number of initializations
 %   bInit: potential initial values, see below
 %   weight: either string ('2SLS', 'IV') or user-supplied weights;
-%   FE: 1 - fixed effects (within estimator, demean)
+%   FE: 1 - fixed effects (include a constant term in controls)
 
 % --------------------------- OUTPUT --------------------------------
 %   Gr_EST: Group composition, N by Gmax matrix
 %   GIRF: Group IRF, 1 by Gmax cell, with K by 1 by G by H coefs
 %   OBJ: minimized objective function for each Ghat, 1 by Gmax vector
-%   IC: Group IRF, K by H by Gmax matrix
+%   IC: information criterion, 1 by Gmax vector
 
 % when weight, FE, large T are not supplied
 % by default we use:
-% 1) inverse of asym.variance as weighting matrix
+% 1) inverse of the covariance matrix of moment conditions (averaged over h)
 % 2) FE
 % 3) large T inference
 
 if nargin < 5
     indOut = ind_LP(reg);
-    weight = indOut.asymV;
+    weight = repmat(mean(indOut.v_hac,3),1,1,reg.param.N,1);
 end
 
 if nargin < 6
