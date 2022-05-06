@@ -31,6 +31,7 @@ y = data(:,par.y_idx);
 x = data(:,par.x_idx);
 c = data(:,par.c_idx);   % if we don't have controls, par.c_idx should be []
 zx = data(:,par.z_idx);
+K = size(x,2);
 L = size(zx,2);     % L by 1 instrument
 
 %% Step 3: Generate lags
@@ -49,9 +50,9 @@ if isempty(c) && isempty(zx)
     tmp = [y x ylead ylag xlag];
     keep  = sum(isnan(tmp),2)==0;
     reg.y = tmp(keep,1);
-    reg.x = tmp(keep,2);
-    reg.LHS = tmp(keep,2+1:2+par.horizon);
-    reg.control = tmp(keep,2+par.horizon+1:end);
+    reg.x = tmp(keep,2:1+K);
+    reg.LHS = tmp(keep,2+K:1+K+par.horizon);
+    reg.control = tmp(keep,1+K+par.horizon+1:end);
     
 elseif isempty(c)
     %% LP-IV: but no external controls
@@ -71,10 +72,10 @@ elseif isempty(c)
     tmp = [y x zx ylead ylag xlag zlag];
     keep    = sum(isnan(tmp),2)==0;
     reg.y   = tmp(keep,1);
-    reg.x   = tmp(keep,2);
-    reg.zx  = tmp(keep,3:2+L);
-    reg.LHS = tmp(keep,2+L+1:2+L+par.horizon);
-    reg.c   = tmp(keep,2+L+par.horizon+1:end);
+    reg.x   = tmp(keep,2:1+K);
+    reg.zx  = tmp(keep,2+K:1+K+L);
+    reg.LHS = tmp(keep,1+K+L+1:1+K+L+par.horizon);
+    reg.c   = tmp(keep,1+K+L+par.horizon+1:end);
     
 elseif isempty(zx)
     %% OLS: with external controls
@@ -95,9 +96,9 @@ elseif isempty(zx)
     tmp = [y x ylead c ylag xlag clag];
     keep  = sum(isnan(tmp),2)==0;
     reg.y = tmp(keep,1);
-    reg.x = tmp(keep,2);
-    reg.LHS = tmp(keep,3:2+par.horizon);
-    reg.c = tmp(keep,2+par.horizon+1:end);
+    reg.x = tmp(keep,2:1+K);
+    reg.LHS = tmp(keep,1+K+1:1+K+par.horizon);
+    reg.c = tmp(keep,1+K+par.horizon+1:end);
 
 else
     %% LP-IV: with external controls
@@ -121,10 +122,10 @@ else
     tmp = [y x zx ylead c ylag xlag clag zlag];
     keep  = sum(isnan(tmp),2)==0;
     reg.y = tmp(keep,1);
-    reg.x = tmp(keep,2);
-    reg.zx = tmp(keep,3:2+L);
-    reg.LHS = tmp(keep,2+L+1:2+L+par.horizon);
-    reg.c = tmp(keep,2+L+par.horizon+1:end);
+    reg.x = tmp(keep,2:1+K);
+    reg.zx = tmp(keep,1+K+1:1+K+L);
+    reg.LHS = tmp(keep,1+K+L+1:1+K+L+par.horizon);
+    reg.c = tmp(keep,1+K+L+par.horizon+1:end);
 end
 
 
