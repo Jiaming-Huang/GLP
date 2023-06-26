@@ -4,12 +4,17 @@ function indOut = ind_LP(reg)
 %% unpack variables
 LHS     = reg.LHS;
 x       = reg.x;
-c       = reg.c;
 
-if isfield(reg,'zc')
-    zc = reg.zc;
+if isfield(reg,'c')
+    c = reg.c;
+    if isfield(reg,'zc')
+        zc = reg.zc;
+    else
+        zc = reg.c;
+    end
 else
-    zc = reg.c;
+    c = [];
+    zc = [];
 end
 if isfield(reg,'zx')
     zx = reg.zx;
@@ -34,7 +39,7 @@ se      = nan(Kall,1,N,H);
 asymV   = nan(Kall,Kall,N,H);
 v_hac   = nan(Lall,Lall,N,H);
 F       = nan(N,1);
-
+res     = nan(N*T,H);
 
 for i = 1:N
     Y    = LHS(T*(i-1)+1:T*i,:);
@@ -56,6 +61,7 @@ for i = 1:N
     bhat = (Xhat'*Xhat)\(Xhat'*Y);
     ehat = Y - X*bhat;
     b(:,:,i,:) = bhat;
+    res(T*(i-1)+1:T*i,:) = ehat;
 
     % compute HAC SE
     for h = 1:H
@@ -84,4 +90,5 @@ indOut.se    = se;
 indOut.asymV = asymV;
 indOut.v_hac = v_hac;
 indOut.F     = F;
+indOut.res   = res;
 end

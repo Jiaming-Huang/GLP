@@ -18,18 +18,24 @@ function panOut = panel_LP(reg, FE)
 %% unpack variables
 LHS     = reg.LHS;
 x       = reg.x;
-c       = reg.c;
 
+if isfield(reg,'c')
+    c = reg.c;
+    if isfield(reg,'zc')
+        zc = reg.zc;
+    else
+        zc = reg.c;
+    end
+else
+    c = [];
+    zc = [];
+end
 if isfield(reg,'zx')
     zx = reg.zx;
 else
     zx = reg.x;
 end
-if isfield(reg,'zc')
-    zc = reg.zc;
-else
-    zc = reg.c;
-end
+
 
 N       = reg.param.N;
 T       = reg.param.T;
@@ -50,7 +56,7 @@ elseif FE == 0
     X = [x c ones(N*T,1)];
     Z = [zx zc ones(N*T,1)];
 else
-    % FD: we require all variables have been differenced
+    % FD: we assume all variables have been differenced
     X = [x c];
     Z = [zx zc];
 end
@@ -106,7 +112,7 @@ sum_g=1^G  X_g'*u_g*u_g'*X_g
 and now G=N.
 
 Input: Xu, NT x P matrix of X.*uhat
-          in the case of GMM, it is Z.*uhat where uhat is the residual
+            in the case of GMM, it is Z.*uhat where uhat is the residual
         
 Output: Sigma^{cluster} (not scaled by NT)
 

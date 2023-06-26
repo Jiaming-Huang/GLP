@@ -3,8 +3,10 @@ function par = params(G0,parchoice)
 % bet controls size
 % parchoice - 1, same size different persistence
 %           - 2, different size same persistence
-
-if G0 == 2
+if G0 == 1
+    bet = 1;
+    phi = 0.5;
+elseif G0 == 2
     if parchoice == 1
         bet       = [3 3];
         phi        = [0.2 0.6];
